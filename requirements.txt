@@ -1,4 +1,4 @@
-botbuilder-integration-aiohttp>=4.14.0
+botbuilder-integration-aiohttp
 langchain==0.0.286
 openai==0.27.8
 botbuilder-dialogs
