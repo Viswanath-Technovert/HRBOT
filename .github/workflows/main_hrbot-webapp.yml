@@ -66,4 +66,4 @@ jobs:
         with:
           app-name: 'HRBot-WebApp'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_517F3D33C6314C53A1706AF5D15826D9 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_846AA4F184224A2CA00DDD703A38114A }}
