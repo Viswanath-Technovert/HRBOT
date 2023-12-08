@@ -1,13 +1,19 @@
+from sentence_transformers import SentenceTransformer, util
+import docx as dx
+from sentence_transformers import SentenceTransformer
 from langchain.chains.llm import LLMChain
 from langchain.document_loaders import Docx2txtLoader
-from langchain.embeddings.openai import OpenAIEmbeddings
+
 from langchain.vectorstores import FAISS
 from langchain.prompts import PromptTemplate
 from langchain.document_loaders import PyPDFLoader
 from langchain.document_loaders import TextLoader
+from langchain.schema.document import Document
+
 
 import os
-from langchain.llms import AzureOpenAI
+# from langchain.llms import AzureOpenAI
+from langchain.chat_models.azure_openai import AzureChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -20,6 +26,16 @@ os.environ["OPENAI_API_KEY"]= 'e63ed695495543d58595fab4e27e4ff1'
 os.environ['OPENAI_API_VERSION'] = '2023-07-01-preview'
 os.environ['OPENAI_API_BASE'] = 'https://tv-llm-applications.openai.azure.com/'
 os.environ['OPENAI_API_TYPE'] = 'azure'
+
+def read_docx(file_path):
+    doc = dx.Document(file_path)
+    full_text = []
+
+    for paragraph in doc.paragraphs:
+        full_text.append(paragraph.text)
+
+    return '\n'.join(full_text)
+
 
 def pdf_query_updated(query, text_splitter, llm, query_options, memory):  
 
@@ -40,16 +56,21 @@ def pdf_query_updated(query, text_splitter, llm, query_options, memory):
             documents_query.extend(loader.load())
 
 
-    docs=text_splitter.split_documents(documents_query)
-    # embeddings=HuggingFaceEmbeddings(model_name = 'sentence-transformers/all-MiniLM-L6-v2')
-    embeddings = OpenAIEmbeddings(deployment='ada-embed',
-                                  openai_api_key='e63ed695495543d58595fab4e27e4ff1',
-                                  openai_api_base= 'https://tv-llm-applications.openai.azure.com/',
-                                  openai_api_type="azure",
-                                  openai_api_version='2023-07-01-preview',
-                                  chunk_size=16)
+    # docs=text_splitter.split_documents(documents_query)
+    # # embeddings=HuggingFaceEmbeddings(model_name = 'sentence-transformers/all-MiniLM-L6-v2')
+    # embeddings = OpenAIEmbeddings(deployment='ada-embed',
+    #                               openai_api_key='e63ed695495543d58595fab4e27e4ff1',
+    #                               openai_api_base= 'https://tv-llm-applications.openai.azure.com/',
+    #                               openai_api_type="azure",
+    #                               openai_api_version='2023-07-01-preview',
+    #                               chunk_size=16)
+    bi_encoder = SentenceTransformer('multi-qa-MiniLM-L6-cos-v1')
+    bi_encoder.max_seq_length = 256     #Truncate long passages to 256 tokens
+    top_k = 32                          #Number of passages we want to retrieve with the bi-encoder
+
+
     
-    document_search = FAISS.from_texts([t.page_content for t in docs], embeddings)
+    # document_search = FAISS.from_texts([t.page_content for t in docs], embeddings)
 
 
     template = """You are an AI having a conversation with a human.
@@ -65,17 +86,24 @@ def pdf_query_updated(query, text_splitter, llm, query_options, memory):
 
     prompt = PromptTemplate(input_variables=["chat_history", "human_input", "context"], template=template)
     chain = LLMChain(llm = llm, prompt = prompt,memory = memory)
+    
+    doc_path = "Guardsman Group FAQ.docx"
+    text_from_docx = read_docx(doc_path)
+    # model = SentenceTransformer('multi-qa-MiniLM-L6-cos-v1')
+    # document = model.encode(text_from_docx)
+    local_doc = Document(page_content=text_from_docx,metadata={})
 
-    result, context_docs = llm_query(query, document_search, chain)
+
+    result, context_docs = llm_query(query, local_doc, chain)
 
     return result, context_docs
 
 
 def llm_query(query, document_search, chain):
     
-    docs = document_search.similarity_search(query)
-    chain_res = chain.predict(human_input = query, context = docs).split('Human:')[0]
-    return chain_res + '\n\n', docs
+    # docs = document_search.similarity_search(query)
+    chain_res = chain.predict(human_input = query, context = document_search).split('Human:')[0]
+    return chain_res + '\n\n', document_search
 
 
 # file_path = r"QandA.docx"

@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 from langchain.llms import AzureOpenAI
+# from langchain.embeddings import OpenAIEmbeddings
+# from langchain.chat_models.azure_openai import AzureChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from llm_backend import pdf_query_updated
@@ -145,16 +147,16 @@ def answers_from_clu(question_from_user):
 
 
 def get_connection_string():
-    # conn_string = ("Driver={SQL Server};"
-    #                "Server=TL166;"
-    #                "Database=GMBOT;"
-    #                "Trusted_Connection=yes;")
+    conn_string = ("Driver={SQL Server};"
+                   "Server=TL166;"
+                   "Database=GMBOT;"
+                   "Trusted_Connection=yes;")
     
-    conn_string = ('Driver={ODBC Driver 17 for SQL Server};'
-                   'Server=tcp:llm-sql-server.database.windows.net,1433;'
-                   'Database=llm-db;'
-                   'Uid=llm-admin;'
-                   'Pwd={t3chn0v3rt@datascience};')
+    # conn_string = ('Driver={ODBC Driver 17 for SQL Server};'
+    #                'Server=tcp:llm-sql-server.database.windows.net,1433;'
+    #                'Database=llm-db;'
+    #                'Uid=llm-admin;'
+    #                'Pwd={t3chn0v3rt@datascience};')
     return conn_string
 
 def clu_get_intent(result_from_clu):
@@ -684,6 +686,7 @@ class MyBot(ActivityHandler):
                 query_options = [file_path]
                 human_query = question
                 text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+                # llm = AzureChatOpenAI(deployment_name='gpt-0301', temperature = 0)
                 llm = AzureOpenAI(deployment_name='gpt-0301', temperature = 0)
                 memory = ConversationBufferMemory(memory_key="chat_history", input_key = 'human_input')
  
