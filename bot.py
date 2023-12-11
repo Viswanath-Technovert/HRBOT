@@ -90,16 +90,15 @@ def convert_dates(results):
     converted_results = []
 
     for result in results:
-        name, date_str, day, start_time_str, end_time_str = result
+        name, date_datetime, day, start_time_str, end_time_str = result
 
-        # Convert date string to datetime
-        date_datetime = datetime.strptime(date_str, "%Y-%m-%d").date()
+        # No need to convert date_str if it's already of type datetime
 
         # Convert start and end times
-        start_time_formatted = format_time(start_time_str[:7])
-        end_time_formatted = format_time(end_time_str[:7])
+        # start_time_formatted = format_time(start_time_str[:7])
+        # end_time_formatted = format_time(end_time_str[:7])
 
-        converted_results.append((name, date_datetime, day, start_time_formatted, end_time_formatted))
+        converted_results.append((name, date_datetime, day, start_time_str, end_time_str))
 
     return converted_results
 
@@ -152,11 +151,11 @@ def get_connection_string():
 #                    "Database=GMBOT;"
 #                    "Trusted_Connection=yes;")
     
-    conn_string = ('Driver={ODBC Driver 18 for SQL Server};'
-                   'Server=tcp:mysqlserver1666.database.windows.net,1433;'
-                   'Database=GMBOT;'
-                   'Uid=azureuser;'
-                   'Pwd={Azure@23498};')
+    conn_string = ('Driver={ODBC Driver 17 for SQL Server};'
+                  'Server=tcp:mysqlserver1666.database.windows.net,1433;'
+                  'Database=GMBOT;'
+                   'Uid=Azureuser;'
+                    'Pwd={Azure@23498};')
     return conn_string
 
 def clu_get_intent(result_from_clu):
