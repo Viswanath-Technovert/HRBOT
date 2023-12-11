@@ -152,8 +152,8 @@ def get_connection_string():
 #                    "Database=GMBOT;"
 #                    "Trusted_Connection=yes;")
     
-    conn_string = ('Driver={ODBC Driver 17 for SQL Server};'
-                   'Server=tcp:llm-sql-server.database.windows.net,1433;'
+    conn_string = ('Driver={ODBC Driver 18 for SQL Server};'
+                   'Server=tcp:mysqlserver1666.database.windows.net,1433;'
                    'Database=GMBOT;'
                    'Uid=azureuser;'
                    'Pwd={Azure@23498};')
