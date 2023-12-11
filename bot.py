@@ -154,9 +154,9 @@ def get_connection_string():
     
     conn_string = ('Driver={ODBC Driver 17 for SQL Server};'
                    'Server=tcp:llm-sql-server.database.windows.net,1433;'
-                   'Database=llm-db;'
-                   'Uid=llm-admin;'
-                   'Pwd={t3chn0v3rt@datascience};')
+                   'Database=GMBOT;'
+                   'Uid=azureuser;'
+                   'Pwd={Azure@23498};')
     return conn_string
 
 def clu_get_intent(result_from_clu):
