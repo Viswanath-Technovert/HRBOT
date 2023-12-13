@@ -152,7 +152,7 @@ def get_connection_string():
     #                "Database=GMBOT;"
     #                "Trusted_Connection=yes;")
     
-    conn_string = ('Driver={ODBC Driver 18 for SQL Server};'
+    conn_string = ('Driver={ODBC Driver 17 for SQL Server};'
                   'Server=tcp:mysqlserver1666.database.windows.net,1433;'
                   'Database=GMBOT;'
                   'Uid=Azureuser;'
@@ -175,7 +175,7 @@ class MyBot(ActivityHandler):
         custom_QandA_Confidence = answer.confidence
         lower_question = question.lower()
         print(f'Debug: {custom_QandA_Confidence}')
-        if custom_QandA_Confidence > 0.6:
+        if custom_QandA_Confidence > 0.7:
             # Check for specific user input to provide suggested actions
             if "about organization" in lower_question:
                 org_available_actions = SuggestedActions(
@@ -237,7 +237,7 @@ class MyBot(ActivityHandler):
             elif "payroll details" in lower_question:
                 payroll_available_actions = SuggestedActions(
                     actions=[
-                        CardAction(title="View MY Pay Slip", type=ActionTypes.im_back, value="View MY Pay Slip"),
+                        CardAction(title="View My Pay Slip", type=ActionTypes.im_back, value="View My Pay Slip"),
                         CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies")
                     ]
                 )
@@ -333,7 +333,7 @@ class MyBot(ActivityHandler):
             best_intent, confidence_best_intent = clu_get_intent(output_from_clu)
             print(f'**************** \n\n Debug: \n\n Best Intent - {best_intent} \n\n Confidence - {confidence_best_intent[0]} \n\n****************')
  
-            if confidence_best_intent.values[0] > 0.6:
+            if confidence_best_intent.values[0] > 0.7:
 
                 if best_intent == "GetPaySlip":
                     conn_string = get_connection_string()
@@ -483,7 +483,6 @@ class MyBot(ActivityHandler):
                         await turn_context.send_activity(GWH_response_activity)
                     
 
-                # elif best_intent == "WorkingHours":
                     
                     else: 
                             
