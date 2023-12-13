@@ -237,7 +237,7 @@ class MyBot(ActivityHandler):
             elif "payroll details" in lower_question:
                 payroll_available_actions = SuggestedActions(
                     actions=[
-                        CardAction(title="View MY Pay Slip", type=ActionTypes.im_back, value="View MY Pay Slip"),
+                        CardAction(title="View My Pay Slip", type=ActionTypes.im_back, value="View My Pay Slip"),
                         CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies")
                     ]
                 )
