@@ -275,7 +275,7 @@ class MyBot(ActivityHandler):
                         CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization")
                     ]
                 )
-                hi_response_activity = MessageFactory.text("What else can I assist you with?")
+                hi_response_activity = MessageFactory.text("What can I assist you with?")
                 hi_response_activity.suggested_actions = hi_suggested_actions
                 await turn_context.send_activity(hi_response_activity)
 
