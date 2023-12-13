@@ -175,7 +175,7 @@ class MyBot(ActivityHandler):
         custom_QandA_Confidence = answer.confidence
         lower_question = question.lower()
         print(f'Debug: {custom_QandA_Confidence}')
-        if custom_QandA_Confidence > 0.7:
+        if custom_QandA_Confidence > 0.6:
             # Check for specific user input to provide suggested actions
             if "about organization" in lower_question:
                 org_available_actions = SuggestedActions(
@@ -237,11 +237,11 @@ class MyBot(ActivityHandler):
             elif "payroll details" in lower_question:
                 payroll_available_actions = SuggestedActions(
                     actions=[
-                        CardAction(title="Pay Slips", type=ActionTypes.im_back, value="Pay Slips"),
-                        CardAction(title="Payroll Info", type=ActionTypes.im_back, value="Payroll Info")
+                        CardAction(title="View MY Pay Slip", type=ActionTypes.im_back, value="View MY Pay Slip"),
+                        CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies")
                     ]
                 )
-                payroll_response_activity = MessageFactory.text("Would you prefer to inquire about comprehensive payroll details or access your recent payslips?")
+                payroll_response_activity = MessageFactory.text("Would you prefer to inquire about  payroll details or access your recent payslips?")
                 payroll_response_activity.suggested_actions = payroll_available_actions
                 await turn_context.send_activity(payroll_response_activity)
 
@@ -780,7 +780,7 @@ class MyBot(ActivityHandler):
     ):
         for member_added in members_added:
             if member_added.id != turn_context.activity.recipient.id:
-                welcome_message = "Hi, Welcome to Guardsman!\n\nWith what can I help you with today?"
+                welcome_message = "Hi, Welcome to Guardsman!\n\n What can I help you with today?"
 
                 suggested_actions = SuggestedActions(
                     actions=[
