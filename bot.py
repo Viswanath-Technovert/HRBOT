@@ -525,7 +525,7 @@ class MyBot(ActivityHandler):
                                 # Add more follow-up actions as needed
                             ]
                         )
-                        follow_up_response = MessageFactory.text("Would you like to go back or return to the main menu?")
+                        follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
                         follow_up_response.suggested_actions = follow_up_actions
                         await turn_context.send_activity(follow_up_response)
 
