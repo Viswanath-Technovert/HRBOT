@@ -173,6 +173,7 @@ date = "2023-11-13"
 
 class MyBot(ActivityHandler):
     
+    
     def __init__(self,conversation: ConversationState):
         self.con_state = conversation
         self.state_prop = self.con_state.create_property("dialog_set")
@@ -183,15 +184,31 @@ class MyBot(ActivityHandler):
     async def GetLeaveType(self, waterfall_step: WaterfallStepContext):
         self.leave_info = []
         print(self.leave_info)
-        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter the type of leave:")))
+        # Suggested Actions
+        leave_options = SuggestedActions(
+            actions=[
+                CardAction(title="Vacation Leave", type=ActionTypes.im_back, value="Vacation Leave"),
+                CardAction(title="Sick Leave", type=ActionTypes.im_back, value="Sick Leave"),
+                CardAction(title="Service Incentive Leave", type=ActionTypes.im_back, value="Service Incentive Leave"),
+                CardAction(title="Paternity Leave", type=ActionTypes.im_back, value="Paternity Leave"),
+            ]
+        )
+
+        # Follow-up text with suggested actions
+        leave_response = MessageFactory.text("Please enter the type of leave:")
+        leave_response.suggested_actions = leave_options
+
+        # Sending the follow-up message
+        return await waterfall_step.context.send_activity(leave_response)
+        # return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter the type of leave:")))
     
     async def GetStartDate(self, waterfall_step: WaterfallStepContext):
         self.leave_info.append(waterfall_step._turn_context.activity.text)
-        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter leave start date:")))
+        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter leave start date: (dd-mm-yyyy)")))
 
     async def GetEndDate(self, waterfall_step: WaterfallStepContext):
         self.leave_info.append(waterfall_step._turn_context.activity.text)
-        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter leave end date:")))
+        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter leave end date: (dd-mm-yyyy)")))
 
     async def completed(self, waterfall_step: WaterfallStepContext): 
         self.leave_info.append(waterfall_step._turn_context.activity.text)
@@ -202,8 +219,8 @@ class MyBot(ActivityHandler):
         # await waterfall_step.context.send_activity(MessageFactory.text(f'End date: {self.leave_info[2]}'))
         follow_up_actions = SuggestedActions(
                             actions=[
-                                CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value="Return To The Main Menu"),
                                 # Add more follow-up actions as needed
                             ]
                         )
@@ -213,6 +230,7 @@ class MyBot(ActivityHandler):
         return await waterfall_step.context.send_activity(follow_up_response)
     
     async def on_message_activity(self, turn_context: TurnContext):
+        current_state = turn_context.turn_state.get('current_state')
         dialog_context = await self.dialog_set.create_context(turn_context)
         if (dialog_context.active_dialog is not None):
             await dialog_context.continue_dialog()
@@ -222,15 +240,20 @@ class MyBot(ActivityHandler):
             custom_QandA_Confidence = answer.confidence
             lower_question = question.lower()
             print(f'Debug: {custom_QandA_Confidence}')
+            print(lower_question ,"in retrn")
             if custom_QandA_Confidence > 0.7:
                 # Check for specific user input to provide suggested actions
                 if "about organization" in lower_question:
+                    turn_context.turn_state['current_state'] = "about_organization"
+                    self.current_state = turn_context.turn_state['current_state']
+                    current_state = turn_context.turn_state['current_state'] 
                     org_available_actions = SuggestedActions(
                         actions=[
                             CardAction(title="Services", type=ActionTypes.im_back, value="Services"),
                             CardAction(title="Contact us", type=ActionTypes.im_back, value="Contact us"),
                             CardAction(title="Locations", type=ActionTypes.im_back, value="Locations"),
-                            CardAction(title="Clients", type=ActionTypes.im_back, value="Clients")
+                            CardAction(title="Clients", type=ActionTypes.im_back, value="Clients"),
+                            CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                         ]
                     )
                     aboutorganization_response_activity = MessageFactory.text("What else would you like to know about Guardsman?")
@@ -255,6 +278,9 @@ class MyBot(ActivityHandler):
                 #     await turn_context.send_activity(services_response_activity)
 
                 elif "leave policies" in lower_question:
+                    turn_context.turn_state['current_state'] = "leave management"
+                    self.current_state = turn_context.turn_state['current_state']
+                    current_state = turn_context.turn_state['current_state'] 
                     LP_actions = SuggestedActions(
                         actions=[                    
                             CardAction(title="Vacation Leave", type=ActionTypes.im_back, value="Vacation Leave"),
@@ -262,6 +288,8 @@ class MyBot(ActivityHandler):
                             CardAction(title="Service Incentive Leave", type=ActionTypes.im_back,
                                         value="Service Incentive Leave"),
                             CardAction(title="Paternity Leave", type=ActionTypes.im_back, value="Paternity Leave"),
+                            CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                            CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                         ]
                     )
                     Lp_response_activity = MessageFactory.text('Kindly choose the category of leave policy information you are seeking:')
@@ -270,11 +298,16 @@ class MyBot(ActivityHandler):
                     
                     
                 elif  "leave management" in lower_question:
+                        turn_context.turn_state['current_state'] = "leave management"
+                        self.current_state = turn_context.turn_state['current_state']
+                        current_state = turn_context.turn_state['current_state'] 
+                        
                         LM_actions = SuggestedActions(
                         actions=[
                             CardAction(title="Check My Leave Balances", type=ActionTypes.im_back, value="Check My Leave Balances"),
                             CardAction(title="Apply Leave", type=ActionTypes.im_back, value="Apply Leave"),
-                            CardAction(title="Leave Policies", type=ActionTypes.im_back, value="Leave Policies")
+                            CardAction(title="Leave Policies", type=ActionTypes.im_back, value="Leave Policies"),
+                            CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                         ]
                     )
                         LM_response_activity = MessageFactory.text("How may I assist you with your leave management needs?")
@@ -282,35 +315,140 @@ class MyBot(ActivityHandler):
                         await turn_context.send_activity(LM_response_activity)
 
                 elif "payroll details" in lower_question:
+                    turn_context.turn_state['current_state'] = "payroll details"
+                    self.current_state = turn_context.turn_state['current_state']
+                    current_state = turn_context.turn_state['current_state'] 
+                
                     payroll_available_actions = SuggestedActions(
                         actions=[
                             CardAction(title="View My Pay Slip", type=ActionTypes.im_back, value="View My Pay Slip"),
-                            CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies")
+                            CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies"),
+                            CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                            
                         ]
                     )
                     payroll_response_activity = MessageFactory.text("Would you prefer to inquire about  payroll details or access your recent payslips?")
                     payroll_response_activity.suggested_actions = payroll_available_actions
                     await turn_context.send_activity(payroll_response_activity)
 
-                elif 'yes' in lower_question:
-                    yes_suggested_actions = SuggestedActions(
-                        actions=[
-                            CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
-                            CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
-                            CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
-                            CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization")
-                        ]
-                    )
-                    yes_response_activity = MessageFactory.text("What else can I assist you with?")
-                    yes_response_activity.suggested_actions = yes_suggested_actions
-                    await turn_context.send_activity(yes_response_activity)
+                # elif 'yes' in lower_question:
+                #     yes_suggested_actions = SuggestedActions(
+                #         actions=[
+                #             CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
+                #             CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
+                #             CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
+                #             CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization"),
+                #             CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                #             CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                #         ]
+                #     )
+                #     yes_response_activity = MessageFactory.text("What else can I assist you with?")
+                #     yes_response_activity.suggested_actions = yes_suggested_actions
+                #     await turn_context.send_activity(yes_response_activity)
 
                 
-                elif 'no' in lower_question:
-                    await turn_context.send_activity(answer.answer)
+                # elif 'no' in lower_question:
+                #     await turn_context.send_activity(answer.answer)
 
                 elif 'thankyou' in lower_question:
                     await turn_context.send_activity(answer.answer)
+
+                elif "go back" in lower_question:
+                
+                    if self.current_state == "about_organization":
+                            print(current_state, 'none state of current')
+                            org_available_actions = SuggestedActions(
+                                actions=[
+                                    CardAction(title="Services", type=ActionTypes.im_back, value="Services"),
+                                    CardAction(title="Contact us", type=ActionTypes.im_back, value="Contact us"),
+                                    CardAction(title="Locations", type=ActionTypes.im_back, value="Locations"),
+                                    CardAction(title="Clients", type=ActionTypes.im_back, value="Clients"),
+                                    CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                                    
+                                    
+                                ]
+                            )
+                            aboutorganization_response_activity = MessageFactory.text("What else would you like to know about Guardsman?")
+                            aboutorganization_response_activity.suggested_actions = org_available_actions
+                            await turn_context.send_activity(aboutorganization_response_activity)
+
+                    elif self.current_state == "leave policies":
+                            LP_actions = SuggestedActions(
+                                actions=[                    
+                                    CardAction(title="Vacation Leave", type=ActionTypes.im_back, value="Vacation Leave"),
+                                    CardAction(title="Sick Leave", type=ActionTypes.im_back, value="Sick Leave"),
+                                    CardAction(title="Service Incentive Leave", type=ActionTypes.im_back,
+                                                value="Service Incentive Leave"),
+                                    CardAction(title="Paternity Leave", type=ActionTypes.im_back, value="Paternity Leave"),
+                                    CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                    CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                                    
+                                ]
+                            )
+                            Lp_response_activity = MessageFactory.text('What else would you like to know about Leave Policies?')
+                            Lp_response_activity.suggested_actions = LP_actions
+                            await turn_context.send_activity(Lp_response_activity)
+
+                    elif self.current_state == "leave management":
+                        LM_actions = SuggestedActions(
+                                actions=[
+                                    CardAction(title="Check My Leave Balances", type=ActionTypes.im_back, value="Check My Leave Balances"),
+                                    CardAction(title="Apply Leave", type=ActionTypes.im_back, value="Apply Leave"),
+                                    CardAction(title="Leave Policies", type=ActionTypes.im_back, value="Leave Policies"),
+                                    CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                                    
+                                ]
+                            )
+                        LM_response_activity = MessageFactory.text("How may I assist you with your leave management needs?")
+                        LM_response_activity.suggested_actions = LM_actions
+                        await turn_context.send_activity(LM_response_activity)
+
+                    elif self.current_state == "payroll details":
+                        payroll_available_actions = SuggestedActions(
+                            actions=[
+                                CardAction(title="View My Pay Slip", type=ActionTypes.im_back, value="View My Pay Slip"),
+                                CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies"),
+                                CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                                
+                            ]
+                        )
+                        payroll_response_activity = MessageFactory.text("Would you prefer to inquire about  payroll details or access your recent payslips?")
+                        payroll_response_activity.suggested_actions = payroll_available_actions
+                        await turn_context.send_activity(payroll_response_activity)
+                    
+                    elif self.current_state == "UpcomingWeek":
+                        GWH_available_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Last Week Working  Hours", type=ActionTypes.im_back, value="Last Week Working  Hours"),
+                            CardAction(title="Next Week Working Hours", type=ActionTypes.im_back, value="Next Week Working Hours"),
+                            CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                        ]
+                    )
+                        GWH_response_activity = MessageFactory.text("Please choose from available options")
+                        GWH_response_activity.suggested_actions = GWH_available_actions
+                        await turn_context.send_activity(GWH_response_activity)
+
+                    elif self.current_state == "PreviousWeek":
+                        GWH_available_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Last Week Working  Hours", type=ActionTypes.im_back, value="Last Week Working  Hours"),
+                            CardAction(title="Next Week Working Hours", type=ActionTypes.im_back, value="Next Week Working Hours"),
+                            CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
+                        ]
+                    )
+                        GWH_response_activity = MessageFactory.text("Please choose from available options")
+                        GWH_response_activity.suggested_actions = GWH_available_actions
+                        await turn_context.send_activity(GWH_response_activity)
+
+
+                    
+
+                    
+
+
+                    
+
+                
 
                 
                 elif 'hi' in lower_question:
@@ -325,6 +463,22 @@ class MyBot(ActivityHandler):
                     hi_response_activity = MessageFactory.text("What can I assist you with?")
                     hi_response_activity.suggested_actions = hi_suggested_actions
                     await turn_context.send_activity(hi_response_activity)
+
+                elif "return to the main menu" in lower_question:
+                    # print("inThis")
+                    # turn_context.turn_state['current_state'] = None
+                    # self.current_state = None
+                    main_menu_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
+                            CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
+                            CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
+                            CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization")
+                        ]
+                    )
+                    main_menu_response_activity = MessageFactory.text("Choose an option from the  Main Menu:")
+                    main_menu_response_activity.suggested_actions = main_menu_actions
+                    await turn_context.send_activity(main_menu_response_activity)
 
                 # elif 'get working hours' in lower_question:
                 #     GWH_available_actions = SuggestedActions(
@@ -361,16 +515,17 @@ class MyBot(ActivityHandler):
                     else:
 
                         await turn_context.send_activity(answer.answer)
+                        print("in this else")
 
                         # Provide follow-up suggested actions
                         follow_up_actions = SuggestedActions(
                             actions=[
-                                CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                                 # Add more follow-up actions as needed
                             ]
                         )
-                        follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                        follow_up_response = MessageFactory.text("Would you like to go back or return to the main menu?")
                         follow_up_response.suggested_actions = follow_up_actions
                         await turn_context.send_activity(follow_up_response)
 
@@ -413,8 +568,8 @@ class MyBot(ActivityHandler):
                             await turn_context.send_activity(response_activity)
                             follow_up_actions = SuggestedActions(
                                 actions=[
-                                    CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                    CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                    CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                    CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value="Return To The Main Menu"),
                                     # Add more follow-up actions as needed
                                 ]
                             )
@@ -426,8 +581,8 @@ class MyBot(ActivityHandler):
                             await turn_context.send_activity(response_activity)
                             follow_up_actions = SuggestedActions(
                                 actions=[
-                                    CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                    CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                    CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                    CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                                     # Add more follow-up actions as needed
                                 ]
                             )
@@ -450,6 +605,9 @@ class MyBot(ActivityHandler):
 
                     
                     elif best_intent == "CheckLeaveBalances":
+                        turn_context.turn_state['current_state'] = "leave management"
+                        self.current_state = turn_context.turn_state['current_state']
+                        current_state = turn_context.turn_state['current_state'] 
                         conn_string = get_connection_string()
                         sql_connection = pyodbc.connect(conn_string)
                         sql_cursor = sql_connection.cursor()
@@ -483,8 +641,8 @@ class MyBot(ActivityHandler):
                             await turn_context.send_activity(response_activity)
                             follow_up_actions = SuggestedActions(
                                 actions=[
-                                    CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                    CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                    CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                    CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                                     # Add more follow-up actions as needed
                                 ]
                             )
@@ -493,6 +651,9 @@ class MyBot(ActivityHandler):
                             await turn_context.send_activity(follow_up_response)
 
                     elif best_intent == 'ApplyLeave':
+                        turn_context.turn_state['current_state'] = "leave management"
+                        self.current_state = turn_context.turn_state['current_state']
+                        current_state = turn_context.turn_state['current_state'] 
                         print(f'Debug: Best Intent - {best_intent}, \n\n Confidence - {confidence_best_intent}')
                         # apply_leave_info = "Enter the type of leave required: \n\n  Enter Start Date: \n\n Enter End Date: \n\n\n\n Thank you for the update. Approval for leave requests is subject to manager authorization. Kindly monitor your email for the status of your leave request."
                         # AL_response_activity = MessageFactory.text(apply_leave_info)
@@ -548,6 +709,9 @@ class MyBot(ActivityHandler):
                             sql_cursor = sql_connection.cursor()
 
                             if entity == 'PreviousWeek':
+                                turn_context.turn_state['current_state'] = "PreviousWeek"
+                                self.current_state = turn_context.turn_state['current_state']
+                                current_state = turn_context.turn_state['current_state']
                                 prev_week_query = "SELECT EmployeeName, Date, Day, ActualStartTime, ActualEndTime FROM EmployeeSchedule WHERE ActualStartTime IS NOT NULL AND EmployeeName = ?;"
                                 sql_cursor.execute(prev_week_query, username)
                                 prev_week_data = sql_cursor.fetchall()
@@ -600,8 +764,8 @@ class MyBot(ActivityHandler):
                                 # Suggested Actions
                                 follow_up_actions = SuggestedActions(
                                     actions=[
-                                        CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                        CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                        CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                        CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                                         # Add more follow-up actions as needed
                                     ]
                                 )
@@ -614,6 +778,9 @@ class MyBot(ActivityHandler):
                                 await turn_context.send_activity(follow_up_response)
 
                             elif entity == 'UpcomingWeek':
+                                turn_context.turn_state['current_state'] = "UpcomingWeek"
+                                self.current_state = turn_context.turn_state['current_state']
+                                current_state = turn_context.turn_state['current_state']
                                 next_week_query = "SELECT EmployeeName,Date, Day, ScheduledStartTime, ScheduledEndTime FROM EmployeeSchedule WHERE ActualStartTime IS NULL AND EmployeeName = ?;"
                                 sql_cursor.execute(next_week_query, username)
                                 next_week_data = sql_cursor.fetchall()
@@ -666,8 +833,8 @@ class MyBot(ActivityHandler):
                                 # Suggested Actions
                                 follow_up_actions = SuggestedActions(
                                     actions=[
-                                        CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                        CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                        CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                                        CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                                         # Add more follow-up actions as needed
                                     ]
                                 )
@@ -746,8 +913,8 @@ class MyBot(ActivityHandler):
                     await turn_context.send_activity(response_activity)   
                     follow_up_actions = SuggestedActions(
                         actions=[
-                            CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                            CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                            CardAction(title="Go Back", type=ActionTypes.im_back, value="Go Back"),
+                            CardAction(title="Return To The Main Menu", type=ActionTypes.im_back, value=" Return To The Main Menu"),
                             # Add more follow-up actions as needed
                         ]
                     )
