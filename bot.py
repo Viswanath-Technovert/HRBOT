@@ -19,8 +19,11 @@ os.environ['OPENAI_API_VERSION'] = '2023-07-01-preview'
 os.environ['OPENAI_API_BASE'] = 'https://tv-llm-applications.openai.azure.com/'
 os.environ['OPENAI_API_TYPE'] = 'azure'
 
-from botbuilder.core import ActivityHandler, MessageFactory, TurnContext,CardFactory
+from botbuilder.core import ActivityHandler, MessageFactory, TurnContext,CardFactory, ConversationState
 from botbuilder.schema import ChannelAccount, CardAction, ActionTypes, SuggestedActions,HeroCard,  CardAction
+from botbuilder.dialogs import DialogSet, WaterfallDialog, WaterfallStepContext
+from botbuilder.dialogs.prompts import TextPrompt, NumberPrompt, PromptOptions
+
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.language.questionanswering import QuestionAnsweringClient
 from azure.ai.language.conversations import ConversationAnalysisClient
@@ -169,385 +172,315 @@ username = 'Thomas'
 date = "2023-11-13"
 
 class MyBot(ActivityHandler):
+    
+    def __init__(self,conversation: ConversationState):
+        self.con_state = conversation
+        self.state_prop = self.con_state.create_property("dialog_set")
+        self.dialog_set = DialogSet(self.state_prop)
+        self.dialog_set.add(TextPrompt("text_prompt"))
+        self.dialog_set.add(WaterfallDialog("main_dialog", [self.GetLeaveType,self.GetStartDate,self.GetEndDate,self.completed]))
+   
+    async def GetLeaveType(self, waterfall_step: WaterfallStepContext):
+        self.leave_info = []
+        print(self.leave_info)
+        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter the type of leave:")))
+    
+    async def GetStartDate(self, waterfall_step: WaterfallStepContext):
+        self.leave_info.append(waterfall_step._turn_context.activity.text)
+        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter leave start date:")))
+
+    async def GetEndDate(self, waterfall_step: WaterfallStepContext):
+        self.leave_info.append(waterfall_step._turn_context.activity.text)
+        return await waterfall_step.prompt("text_prompt",PromptOptions(prompt=MessageFactory.text("Please enter leave end date:")))
+
+    async def completed(self, waterfall_step: WaterfallStepContext): 
+        self.leave_info.append(waterfall_step._turn_context.activity.text)
+        print(self.leave_info)
+        updated_leave_text = f'Below are your leave application details: \n\nLeave type: {self.leave_info[0]} \n\n Start date: {self.leave_info[1]} \n\n End date: {self.leave_info[2]} \n\n Thank you for the update. Approval for leave requests is subject to manager authorization. Kindly monitor your email for the status of your leave request.'
+        await waterfall_step.context.send_activity(MessageFactory.text(updated_leave_text))
+        # await waterfall_step.context.send_activity(MessageFactory.text(f'Start date: {self.leave_info[1]}'))
+        # await waterfall_step.context.send_activity(MessageFactory.text(f'End date: {self.leave_info[2]}'))
+        follow_up_actions = SuggestedActions(
+                            actions=[
+                                CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                                CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                # Add more follow-up actions as needed
+                            ]
+                        )
+        follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+        follow_up_response.suggested_actions = follow_up_actions
+        await waterfall_step.end_dialog()
+        return await waterfall_step.context.send_activity(follow_up_response)
+    
     async def on_message_activity(self, turn_context: TurnContext):
-        question = turn_context.activity.text
-        answer = custom_QandA(question)
-        custom_QandA_Confidence = answer.confidence
-        lower_question = question.lower()
-        print(f'Debug: {custom_QandA_Confidence}')
-        if custom_QandA_Confidence > 0.7:
-            # Check for specific user input to provide suggested actions
-            if "about organization" in lower_question:
-                org_available_actions = SuggestedActions(
-                    actions=[
-                        CardAction(title="Services", type=ActionTypes.im_back, value="Services"),
-                        CardAction(title="Contact us", type=ActionTypes.im_back, value="Contact us"),
-                        CardAction(title="Locations", type=ActionTypes.im_back, value="Locations"),
-                        CardAction(title="Clients", type=ActionTypes.im_back, value="Clients")
-                    ]
-                )
-                aboutorganization_response_activity = MessageFactory.text("What else would you like to know about Guardsman?")
-                aboutorganization_response_activity.suggested_actions = org_available_actions
-                await turn_context.send_activity(answer.answer)
-                await turn_context.send_activity(aboutorganization_response_activity)
+        dialog_context = await self.dialog_set.create_context(turn_context)
+        if (dialog_context.active_dialog is not None):
+            await dialog_context.continue_dialog()
+        else:
+            question = turn_context.activity.text
+            answer = custom_QandA(question)
+            custom_QandA_Confidence = answer.confidence
+            lower_question = question.lower()
+            print(f'Debug: {custom_QandA_Confidence}')
+            if custom_QandA_Confidence > 0.7:
+                # Check for specific user input to provide suggested actions
+                if "about organization" in lower_question:
+                    org_available_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Services", type=ActionTypes.im_back, value="Services"),
+                            CardAction(title="Contact us", type=ActionTypes.im_back, value="Contact us"),
+                            CardAction(title="Locations", type=ActionTypes.im_back, value="Locations"),
+                            CardAction(title="Clients", type=ActionTypes.im_back, value="Clients")
+                        ]
+                    )
+                    aboutorganization_response_activity = MessageFactory.text("What else would you like to know about Guardsman?")
+                    aboutorganization_response_activity.suggested_actions = org_available_actions
+                    await turn_context.send_activity(answer.answer)
+                    await turn_context.send_activity(aboutorganization_response_activity)
+
+                    
+
+                # elif "services" in lower_question:
+                #     services_available_actions = SuggestedActions(
+                #         actions=[
+                #             CardAction(title="Manned Guarding", type=ActionTypes.im_back, value="Manned Guarding"),
+                #             CardAction(title="Temporary Staff Support Services", type=ActionTypes.im_back, value="Temporary Staff Support Services"),
+                #             CardAction(title="Commercial Cleaning", type=ActionTypes.im_back, value="Commercial Cleaning"),
+                #             CardAction(title="CCTV Towers", type=ActionTypes.im_back, value="CCTV Towers"),
+                #             CardAction(title="Car Parking Management", type=ActionTypes.im_back, value="Car Parking Management")
+                #         ]
+                #     )
+                #     services_response_activity = MessageFactory.text("Kindly select the service name to access detailed information")
+                #     services_response_activity.suggested_actions = services_available_actions
+                #     await turn_context.send_activity(services_response_activity)
+
+                elif "leave policies" in lower_question:
+                    LP_actions = SuggestedActions(
+                        actions=[                    
+                            CardAction(title="Vacation Leave", type=ActionTypes.im_back, value="Vacation Leave"),
+                            CardAction(title="Sick Leave", type=ActionTypes.im_back, value="Sick Leave"),
+                            CardAction(title="Service Incentive Leave", type=ActionTypes.im_back,
+                                        value="Service Incentive Leave"),
+                            CardAction(title="Paternity Leave", type=ActionTypes.im_back, value="Paternity Leave"),
+                        ]
+                    )
+                    Lp_response_activity = MessageFactory.text('Kindly choose the category of leave policy information you are seeking:')
+                    Lp_response_activity.suggested_actions = LP_actions
+                    await turn_context.send_activity(Lp_response_activity)
+                    
+                    
+                elif  "leave management" in lower_question:
+                        LM_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Check My Leave Balances", type=ActionTypes.im_back, value="Check My Leave Balances"),
+                            CardAction(title="Apply Leave", type=ActionTypes.im_back, value="Apply Leave"),
+                            CardAction(title="Leave Policies", type=ActionTypes.im_back, value="Leave Policies")
+                        ]
+                    )
+                        LM_response_activity = MessageFactory.text("How may I assist you with your leave management needs?")
+                        LM_response_activity.suggested_actions = LM_actions
+                        await turn_context.send_activity(LM_response_activity)
+
+                elif "payroll details" in lower_question:
+                    payroll_available_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="View My Pay Slip", type=ActionTypes.im_back, value="View My Pay Slip"),
+                            CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies")
+                        ]
+                    )
+                    payroll_response_activity = MessageFactory.text("Would you prefer to inquire about  payroll details or access your recent payslips?")
+                    payroll_response_activity.suggested_actions = payroll_available_actions
+                    await turn_context.send_activity(payroll_response_activity)
+
+                elif 'yes' in lower_question:
+                    yes_suggested_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
+                            CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
+                            CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
+                            CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization")
+                        ]
+                    )
+                    yes_response_activity = MessageFactory.text("What else can I assist you with?")
+                    yes_response_activity.suggested_actions = yes_suggested_actions
+                    await turn_context.send_activity(yes_response_activity)
 
                 
+                elif 'no' in lower_question:
+                    await turn_context.send_activity(answer.answer)
 
-            # elif "services" in lower_question:
-            #     services_available_actions = SuggestedActions(
-            #         actions=[
-            #             CardAction(title="Manned Guarding", type=ActionTypes.im_back, value="Manned Guarding"),
-            #             CardAction(title="Temporary Staff Support Services", type=ActionTypes.im_back, value="Temporary Staff Support Services"),
-            #             CardAction(title="Commercial Cleaning", type=ActionTypes.im_back, value="Commercial Cleaning"),
-            #             CardAction(title="CCTV Towers", type=ActionTypes.im_back, value="CCTV Towers"),
-            #             CardAction(title="Car Parking Management", type=ActionTypes.im_back, value="Car Parking Management")
-            #         ]
-            #     )
-            #     services_response_activity = MessageFactory.text("Kindly select the service name to access detailed information")
-            #     services_response_activity.suggested_actions = services_available_actions
-            #     await turn_context.send_activity(services_response_activity)
+                elif 'thankyou' in lower_question:
+                    await turn_context.send_activity(answer.answer)
 
-            elif "leave policies" in lower_question:
-                LP_actions = SuggestedActions(
-                    actions=[                    
-                        CardAction(title="Vacation Leave", type=ActionTypes.im_back, value="Vacation Leave"),
-                        CardAction(title="Sick Leave", type=ActionTypes.im_back, value="Sick Leave"),
-                        CardAction(title="Service Incentive Leave", type=ActionTypes.im_back,
-                                    value="Service Incentive Leave"),
-                        CardAction(title="Paternity Leave", type=ActionTypes.im_back, value="Paternity Leave"),
-                    ]
-                )
-                Lp_response_activity = MessageFactory.text('Kindly choose the category of leave policy information you are seeking:')
-                Lp_response_activity.suggested_actions = LP_actions
-                await turn_context.send_activity(Lp_response_activity)
                 
-                
-            elif  "leave management" in lower_question:
-                    LM_actions = SuggestedActions(
-                    actions=[
-                        CardAction(title="Check My Leave Balances", type=ActionTypes.im_back, value="Check My Leave Balances"),
-                        CardAction(title="Apply Leave", type=ActionTypes.im_back, value="Apply Leave"),
-                        CardAction(title="Leave Policies", type=ActionTypes.im_back, value="Leave Policies")
-                    ]
-                )
-                    LM_response_activity = MessageFactory.text("How may I assist you with your leave management needs?")
-                    LM_response_activity.suggested_actions = LM_actions
-                    await turn_context.send_activity(LM_response_activity)
+                elif 'hi' in lower_question:
+                    hi_suggested_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
+                            CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
+                            CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
+                            CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization")
+                        ]
+                    )
+                    hi_response_activity = MessageFactory.text("What can I assist you with?")
+                    hi_response_activity.suggested_actions = hi_suggested_actions
+                    await turn_context.send_activity(hi_response_activity)
 
-            elif "payroll details" in lower_question:
-                payroll_available_actions = SuggestedActions(
-                    actions=[
-                        CardAction(title="View My Pay Slip", type=ActionTypes.im_back, value="View My Pay Slip"),
-                        CardAction(title="Payroll Policies", type=ActionTypes.im_back, value="Payroll Policies")
-                    ]
-                )
-                payroll_response_activity = MessageFactory.text("Would you prefer to inquire about  payroll details or access your recent payslips?")
-                payroll_response_activity.suggested_actions = payroll_available_actions
-                await turn_context.send_activity(payroll_response_activity)
-
-            elif 'yes' in lower_question:
-                yes_suggested_actions = SuggestedActions(
-                    actions=[
-                        CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
-                        CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
-                        CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
-                        CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization")
-                    ]
-                )
-                yes_response_activity = MessageFactory.text("What else can I assist you with?")
-                yes_response_activity.suggested_actions = yes_suggested_actions
-                await turn_context.send_activity(yes_response_activity)
+                # elif 'get working hours' in lower_question:
+                #     GWH_available_actions = SuggestedActions(
+                #         actions=[
+                #             CardAction(title="Last Week Working  Hours", type=ActionTypes.im_back, value="Last Week Working  Hours"),
+                #             CardAction(title="Next Week Working Hours", type=ActionTypes.im_back, value="Next Week Working Hours")
+                #         ]
+                #     )
+                #     GWH_response_activity = MessageFactory.text("Please choose from available options")
+                #     GWH_response_activity.suggested_actions = GWH_available_actions
+                #     await turn_context.send_activity(GWH_response_activity)
 
             
-            elif 'no' in lower_question:
-                 await turn_context.send_activity(answer.answer)
 
-            elif 'thankyou' in lower_question:
-                await turn_context.send_activity(answer.answer)
+                else:
+                #     # Send the answer back to the user
+                #     print('Debug1: Unkown Intent')
+                #     file_path = r"Guardsman Group FAQ.docx"
+                #     query_options = [file_path]
+                #     human_query = question
+                #     text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+                #     llm = AzureOpenAI(deployment_name='gpt-0301', temperature = 0)
+                #     memory = ConversationBufferMemory(memory_key="chat_history", input_key = 'human_input')
+    
+                #     response,_ = pdf_query_updated(query = human_query, text_splitter = text_splitter, llm = llm, query_options = query_options, memory = memory)
+    
+                #     response_activity = MessageFactory.text(response)
+        
+                #     await turn_context.send_activity(response_activity)      
+                    print('&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& \n\n',type(answer.answer))
 
-            
-            elif 'hi' in lower_question:
-                hi_suggested_actions = SuggestedActions(
-                    actions=[
-                        CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
-                        CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
-                        CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
-                        CardAction(title="About Organization", type=ActionTypes.im_back, value="About Organization")
-                    ]
-                )
-                hi_response_activity = MessageFactory.text("What can I assist you with?")
-                hi_response_activity.suggested_actions = hi_suggested_actions
-                await turn_context.send_activity(hi_response_activity)
+                    if answer.answer == "Thank you for engaging with me; if you ever seek more information or have additional queries, feel free to reach out. To explore further details or initiate a conversation, Just type 'Hi,' and I'll be ready to assist you with any inquiries you may have. Goodbye for now, and have a wonderful day!":
+                        await turn_context.send_activity(answer.answer)
+                    else:
 
-            # elif 'get working hours' in lower_question:
-            #     GWH_available_actions = SuggestedActions(
-            #         actions=[
-            #             CardAction(title="Last Week Working  Hours", type=ActionTypes.im_back, value="Last Week Working  Hours"),
-            #             CardAction(title="Next Week Working Hours", type=ActionTypes.im_back, value="Next Week Working Hours")
-            #         ]
-            #     )
-            #     GWH_response_activity = MessageFactory.text("Please choose from available options")
-            #     GWH_response_activity.suggested_actions = GWH_available_actions
-            #     await turn_context.send_activity(GWH_response_activity)
+                        await turn_context.send_activity(answer.answer)
 
-           
+                        # Provide follow-up suggested actions
+                        follow_up_actions = SuggestedActions(
+                            actions=[
+                                CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                                CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                # Add more follow-up actions as needed
+                            ]
+                        )
+                        follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                        follow_up_response.suggested_actions = follow_up_actions
+                        await turn_context.send_activity(follow_up_response)
 
             else:
-            #     # Send the answer back to the user
-            #     print('Debug1: Unkown Intent')
-            #     file_path = r"Guardsman Group FAQ.docx"
-            #     query_options = [file_path]
-            #     human_query = question
-            #     text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-            #     llm = AzureOpenAI(deployment_name='gpt-0301', temperature = 0)
-            #     memory = ConversationBufferMemory(memory_key="chat_history", input_key = 'human_input')
- 
-            #     response,_ = pdf_query_updated(query = human_query, text_splitter = text_splitter, llm = llm, query_options = query_options, memory = memory)
- 
-            #     response_activity = MessageFactory.text(response)
-       
-            #     await turn_context.send_activity(response_activity)      
-                print('&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& \n\n',type(answer.answer))
+                # Handling intents from CLU
+                output_from_clu = answers_from_clu(question)
+                best_intent, confidence_best_intent = clu_get_intent(output_from_clu)
+                print(f'**************** \n\n Debug: \n\n Best Intent - {best_intent} \n\n Confidence - {confidence_best_intent[0]} \n\n****************')
+    
+                if confidence_best_intent.values[0] > 0.7:
 
-                if answer.answer == "Thank you for engaging with me; if you ever seek more information or have additional queries, feel free to reach out. To explore further details or initiate a conversation, simply press 'hi,' and I'll be ready to assist you with any inquiries you may have. Goodbye for now, and have a wonderful day!":
-                    await turn_context.send_activity(answer.answer)
-                else:
-
-                    await turn_context.send_activity(answer.answer)
-
-                    # Provide follow-up suggested actions
-                    follow_up_actions = SuggestedActions(
-                        actions=[
-                            CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                            CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                            # Add more follow-up actions as needed
-                        ]
-                    )
-                    follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                    follow_up_response.suggested_actions = follow_up_actions
-                    await turn_context.send_activity(follow_up_response)
-
-        else:
-            # Handling intents from CLU
-            output_from_clu = answers_from_clu(question)
-            best_intent, confidence_best_intent = clu_get_intent(output_from_clu)
-            print(f'**************** \n\n Debug: \n\n Best Intent - {best_intent} \n\n Confidence - {confidence_best_intent[0]} \n\n****************')
- 
-            if confidence_best_intent.values[0] > 0.7:
-
-                if best_intent == "GetPaySlip":
-                    conn_string = get_connection_string()
-                    sql_connection = pyodbc.connect(conn_string)
-                    sql_cursor = sql_connection.cursor()
- 
-                    pay_slips_query = 'SELECT * FROM payslips WHERE EmployeeName = ?;'
-                    sql_cursor.execute(pay_slips_query, username)
-                    payslip_data = sql_cursor.fetchone()
-                    response_activity = MessageFactory.text(f'Your current payslip is:')
-                    # await turn_context.send_activity(response_activity)
-                    if payslip_data:
-                        # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
-                        employeename,employeeid ,salary, deductions, net_pay = payslip_data
-
-                        # Create a Hero Card to display payslip information
-                        payslip_hero_card = HeroCard(
-                                                    title="Payslip",
-                                                    text=(
-                                                        f"**Employee:** {employeename}\n\n "
-                                                        f"**EmployeeID:** {employeeid}\n\n "
-                                                        f"**Salary:** {salary}\n\n"
-                                                        f"**Deductions:** {deductions}\n\n"
-                                                        f"**Net Pay:** {net_pay}"
-                                                    ))
-
-
-                        # Send the Hero Card as an attachment
-                        response_activity = MessageFactory.attachment(CardFactory.hero_card(payslip_hero_card))
-                        await turn_context.send_activity(response_activity)
-                        follow_up_actions = SuggestedActions(
-                            actions=[
-                                CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                                # Add more follow-up actions as needed
-                            ]
-                        )
-                        follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                        follow_up_response.suggested_actions = follow_up_actions
-                        await turn_context.send_activity(follow_up_response)
-                    else:
-                        response_activity = MessageFactory.text("No payslip found for the specified user.")
-                        await turn_context.send_activity(response_activity)
-                        follow_up_actions = SuggestedActions(
-                            actions=[
-                                CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                                # Add more follow-up actions as needed
-                            ]
-                        )
-                        follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                        follow_up_response.suggested_actions = follow_up_actions
-                        await turn_context.send_activity(follow_up_response)
-
-                # elif best_intent == "LeaveManagement":
-                #     LM_actions = SuggestedActions(
-                #     actions=[
-                #         CardAction(title="Check Leave Balances", type=ActionTypes.im_back, value="Check Leave Balances"),
-                #         CardAction(title="Apply Leave", type=ActionTypes.im_back, value="Apply Leave"),
-                #         CardAction(title="Leave Policies", type=ActionTypes.im_back, value="Leave Policies")
-                #     ]
-                # )
-                #     LM_response_activity = MessageFactory.text("How may I assist you with your leave management needs?")
-                #     LM_response_activity.suggested_actions = LM_actions
-                #     await turn_context.send_activity(LM_response_activity)
-
-
-                
-                elif best_intent == "CheckLeaveBalances":
-                    conn_string = get_connection_string()
-                    sql_connection = pyodbc.connect(conn_string)
-                    sql_cursor = sql_connection.cursor()
- 
-                    EL_query = 'SELECT * FROM EmployeeLeave WHERE EmployeeName = ?;'
-                    sql_cursor.execute(EL_query, username)
-                    EL_data = sql_cursor.fetchone()
-                    response_activity = MessageFactory.text(f'Your current Leave balanaces and upcoming leaves are:')
-                    # await turn_context.send_activity(response_activity)
-                    if EL_data:
-                        # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
-                        employeename,employeeid ,SickLeave, PrivilegeLeave,  PaternityLeave,UpcomingThreeLeaves,  Year = EL_data
-
-                        # Create a Hero Card to display payslip information
-                        EL_hero_card = HeroCard(
-                                        title="Leave Balances and Upcoming Leaves",
-                                        text=(
-                                            f"**Employee:** {employeename}\n\n"
-                                            f"**EmployeeID:** {employeeid}\n\n"
-                                            f"**SickLeave:** {SickLeave}\n\n"
-                                            f"**PrivilegeLeave:** {PrivilegeLeave}\n\n"
-                                            f"**PaternityLeave:** {PaternityLeave}\n\n"
-                                            f"**UpcomingThreeLeaves:** {UpcomingThreeLeaves}\n\n"
-                                            f"**Year:** {Year}"
-                                        )
-                                    )
-
-
-                        # Send the Hero Card as an attachment
-                        response_activity = MessageFactory.attachment(CardFactory.hero_card(EL_hero_card))
-                        await turn_context.send_activity(response_activity)
-                        follow_up_actions = SuggestedActions(
-                            actions=[
-                                CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                                # Add more follow-up actions as needed
-                            ]
-                        )
-                        follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                        follow_up_response.suggested_actions = follow_up_actions
-                        await turn_context.send_activity(follow_up_response)
-
-                elif best_intent == 'ApplyLeave':
-                    print(f'Debug: Best Intent - {best_intent}, \n\n Confidence - {confidence_best_intent}')
-                    apply_leave_info = "Enter the type of leave required: \n\n  Enter Start Date: \n\n Enter End Date: \n\n\n\n Thank you for the update. Approval for leave requests is subject to manager authorization. Kindly monitor your email for the status of your leave request."
-                    AL_response_activity = MessageFactory.text(apply_leave_info)
-                    await turn_context.send_activity(AL_response_activity)
-                    follow_up_actions = SuggestedActions(
-                        actions=[
-                            CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                            CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                            # Add more follow-up actions as needed
-                        ]
-                    )
-                    follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                    follow_up_response.suggested_actions = follow_up_actions
-                    await turn_context.send_activity(follow_up_response)
-
-                elif best_intent == "GetWorkingHours":
-                    response = output_from_clu["result"]["prediction"]  
-
-                    entity = response['entities']
-                    if len(entity) == 0: 
-                        
-
-                        # print('-'*111)
-                        # print(entity)
-                        # print('-'*111)
-
-                        GWH_available_actions = SuggestedActions(
-                        actions=[
-                            CardAction(title="Last Week Working  Hours", type=ActionTypes.im_back, value="Last Week Working  Hours"),
-                            CardAction(title="Next Week Working Hours", type=ActionTypes.im_back, value="Next Week Working Hours")
-                        ]
-                    )
-                        GWH_response_activity = MessageFactory.text("Please choose from available options")
-                        GWH_response_activity.suggested_actions = GWH_available_actions
-                        await turn_context.send_activity(GWH_response_activity)
-                    
-
-                    
-                    else: 
-                            
-                        response = output_from_clu["result"]["prediction"]  
-                        # print('-'*111)
-                        # print(response)
-                        # print('-'*111)
-                        # print(response['entities'][0]['category'])
-                        # print('-'*111)
-                        entity = response['entities'][0]['category']
+                    if best_intent == "GetPaySlip":
                         conn_string = get_connection_string()
                         sql_connection = pyodbc.connect(conn_string)
                         sql_cursor = sql_connection.cursor()
+    
+                        pay_slips_query = 'SELECT * FROM payslips WHERE EmployeeName = ?;'
+                        sql_cursor.execute(pay_slips_query, username)
+                        payslip_data = sql_cursor.fetchone()
+                        response_activity = MessageFactory.text(f'Your current payslip is:')
+                        # await turn_context.send_activity(response_activity)
+                        if payslip_data:
+                            # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
+                            employeename,employeeid ,salary, deductions, net_pay = payslip_data
 
-                        if entity == 'PreviousWeek':
-                            prev_week_query = "SELECT EmployeeName, Date, Day, ActualStartTime, ActualEndTime FROM EmployeeSchedule WHERE ActualStartTime IS NOT NULL AND EmployeeName = ?;"
-                            sql_cursor.execute(prev_week_query, username)
-                            prev_week_data = sql_cursor.fetchall()
+                            # Create a Hero Card to display payslip information
+                            payslip_hero_card = HeroCard(
+                                                        title="Payslip",
+                                                        text=(
+                                                            f"**Employee:** {employeename}\n\n "
+                                                            f"**EmployeeID:** {employeeid}\n\n "
+                                                            f"**Salary:** {salary}\n\n"
+                                                            f"**Deductions:** {deductions}\n\n"
+                                                            f"**Net Pay:** {net_pay}"
+                                                        ))
 
-                            response_activity = MessageFactory.text(f'Your Last Week working Hours info:')
-                            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^', list(prev_week_data))
 
-                            output_prev_week = convert_dates(prev_week_data)
+                            # Send the Hero Card as an attachment
+                            response_activity = MessageFactory.attachment(CardFactory.hero_card(payslip_hero_card))
+                            await turn_context.send_activity(response_activity)
+                            follow_up_actions = SuggestedActions(
+                                actions=[
+                                    CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                                    CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                    # Add more follow-up actions as needed
+                                ]
+                            )
+                            follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                            follow_up_response.suggested_actions = follow_up_actions
+                            await turn_context.send_activity(follow_up_response)
+                        else:
+                            response_activity = MessageFactory.text("No payslip found for the specified user.")
+                            await turn_context.send_activity(response_activity)
+                            follow_up_actions = SuggestedActions(
+                                actions=[
+                                    CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                                    CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                    # Add more follow-up actions as needed
+                                ]
+                            )
+                            follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                            follow_up_response.suggested_actions = follow_up_actions
+                            await turn_context.send_activity(follow_up_response)
+
+                    # elif best_intent == "LeaveManagement":
+                    #     LM_actions = SuggestedActions(
+                    #     actions=[
+                    #         CardAction(title="Check Leave Balances", type=ActionTypes.im_back, value="Check Leave Balances"),
+                    #         CardAction(title="Apply Leave", type=ActionTypes.im_back, value="Apply Leave"),
+                    #         CardAction(title="Leave Policies", type=ActionTypes.im_back, value="Leave Policies")
+                    #     ]
+                    # )
+                    #     LM_response_activity = MessageFactory.text("How may I assist you with your leave management needs?")
+                    #     LM_response_activity.suggested_actions = LM_actions
+                    #     await turn_context.send_activity(LM_response_activity)
+
+
                     
-                            data_for_adaptive_card = [
-                                {
-                                    # "EmployeeName": row[0],
-                                    "Date": str(row[1]),
-                                    "Day": row[2],
-                                    "ActualStartTime": row[3],
-                                    "ActualEndTime": row[4],
-                                }
-                                for row in output_prev_week
-                            ]
+                    elif best_intent == "CheckLeaveBalances":
+                        conn_string = get_connection_string()
+                        sql_connection = pyodbc.connect(conn_string)
+                        sql_cursor = sql_connection.cursor()
+    
+                        EL_query = 'SELECT * FROM EmployeeLeave WHERE EmployeeName = ?;'
+                        sql_cursor.execute(EL_query, username)
+                        EL_data = sql_cursor.fetchone()
+                        response_activity = MessageFactory.text(f'Your current Leave balanaces and upcoming leaves are:')
+                        # await turn_context.send_activity(response_activity)
+                        if EL_data:
+                            # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
+                            employeename,employeeid ,SickLeave, PrivilegeLeave,  PaternityLeave,UpcomingThreeLeaves,  Year = EL_data
 
-                            # Creating Adaptive Card
-                            adaptive_card = {
-                                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                                "type": "AdaptiveCard",
-                                "version": "1.0",
-                                "body": [
-                                    {
-                                        "type": "TextBlock",
-                                        "text": "Previous Week Actual Working Hours"+ f"\n\nEmployeeName : {username}",
-                                        "weight": "bolder",
-                                        "size": "medium"
-                                    },
-                                    {
-                                        "type": "ColumnSet",
-                                        "columns": [
-                                            # {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "EmployeeName"}] + [{"type": "TextBlock", "text": data["EmployeeName"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Date"}] + [{"type": "TextBlock", "text": data["Date"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Day"}] + [{"type": "TextBlock", "text": data["Day"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ActualStartTime"}] + [{"type": "TextBlock", "text": data["ActualStartTime"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ActualEndTime"}] + [{"type": "TextBlock", "text": data["ActualEndTime"]} for data in data_for_adaptive_card]},
-                                        ]
-                                    }
-                                ]
-                            }
+                            # Create a Hero Card to display payslip information
+                            EL_hero_card = HeroCard(
+                                            title="Leave Balances and Upcoming Leaves",
+                                            text=(
+                                                f"**Employee:** {employeename}\n\n"
+                                                f"**EmployeeID:** {employeeid}\n\n"
+                                                f"**SickLeave:** {SickLeave}\n\n"
+                                                f"**PrivilegeLeave:** {PrivilegeLeave}\n\n"
+                                                f"**PaternityLeave:** {PaternityLeave}\n\n"
+                                                f"**UpcomingThreeLeaves:** {UpcomingThreeLeaves}\n\n"
+                                                f"**Year:** {Year}"
+                                            )
+                                        )
 
-                            # Sending the Adaptive Card
-                            response_activity = MessageFactory.attachment(CardFactory.adaptive_card(adaptive_card))
+
+                            # Send the Hero Card as an attachment
+                            response_activity = MessageFactory.attachment(CardFactory.hero_card(EL_hero_card))
                             await turn_context.send_activity(response_activity)
-
-                            # Suggested Actions
                             follow_up_actions = SuggestedActions(
                                 actions=[
                                     CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
@@ -555,220 +488,338 @@ class MyBot(ActivityHandler):
                                     # Add more follow-up actions as needed
                                 ]
                             )
-
-                            # Follow-up text with suggested actions
                             follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
                             follow_up_response.suggested_actions = follow_up_actions
-
-                            # Sending the follow-up message
                             await turn_context.send_activity(follow_up_response)
 
-                        elif entity == 'UpcomingWeek':
-                            next_week_query = "SELECT EmployeeName,Date, Day, ScheduledStartTime, ScheduledEndTime FROM EmployeeSchedule WHERE ActualStartTime IS NULL AND EmployeeName = ?;"
-                            sql_cursor.execute(next_week_query, username)
-                            next_week_data = sql_cursor.fetchall()
-                            response_activity = MessageFactory.text(f'Your Next Week working Hours info:')
-                            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^', list(next_week_data))
+                    elif best_intent == 'ApplyLeave':
+                        print(f'Debug: Best Intent - {best_intent}, \n\n Confidence - {confidence_best_intent}')
+                        # apply_leave_info = "Enter the type of leave required: \n\n  Enter Start Date: \n\n Enter End Date: \n\n\n\n Thank you for the update. Approval for leave requests is subject to manager authorization. Kindly monitor your email for the status of your leave request."
+                        # AL_response_activity = MessageFactory.text(apply_leave_info)
+                        # await turn_context.send_activity(AL_response_activity)
+                        # follow_up_actions = SuggestedActions(
+                        #     actions=[
+                        #         CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                        #         CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                        #         # Add more follow-up actions as needed
+                        #     ]
+                        # )
+                        if (dialog_context.active_dialog is not None):
+                            await dialog_context.continue_dialog()
+                        else:
+                            await dialog_context.begin_dialog("main_dialog")
 
-                            output_next_week = convert_dates(next_week_data)
-                            print(output_next_week)
-                            data_for_adaptive_card = [
-                                {
-                                    # "EmployeeName": row[0],
-                                    "Date": str(row[1]),
-                                    "Day": row[2],
-                                    "ScheduledStartTime": row[3],
-                                    "ScheduledEndTime": row[4],
-                                }
-                                for row in output_next_week
-                            ]
+                        
 
-                            # Creating Adaptive Card
-                            adaptive_card = {
-                                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                                "type": "AdaptiveCard",
-                                "version": "1.0",
-                                "body": [
-                                    {
-                                        "type": "TextBlock",
-                                        "text": "Next Week Scheduled Working Hours " + f"\n\nEmployeeName : {username}",
-                                    
-                                        "weight": "bolder",
-                                        "size": "medium"
-                                    },
-                                    {
-                                        "type": "ColumnSet",
-                                        "columns": [
-                                            # {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": data["EmployeeName"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Date"}] +[{"type": "TextBlock", "text": data["Date"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Day"}] + [{"type": "TextBlock", "text": data["Day"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ScheduledStartTime"}] + [{"type": "TextBlock", "text": data["ScheduledStartTime"]} for data in data_for_adaptive_card]},
-                                            {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ScheduledEndTime"}] + [{"type": "TextBlock", "text": data["ScheduledEndTime"]} for data in data_for_adaptive_card]},
-                                        ]
-                                    }
-                                ]
-                            }
+                    elif best_intent == "GetWorkingHours":
+                        response = output_from_clu["result"]["prediction"]  
 
-                            # Sending the Adaptive Card
-                            response_activity = MessageFactory.attachment(CardFactory.adaptive_card(adaptive_card))
-                            await turn_context.send_activity(response_activity)
-
-                            # Suggested Actions
-                            follow_up_actions = SuggestedActions(
-                                actions=[
-                                    CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                                    CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                                    # Add more follow-up actions as needed
-                                ]
-                            )
-
-                            # Follow-up text with suggested actions
-                            follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                            follow_up_response.suggested_actions = follow_up_actions
-
-                            # Sending the follow-up message
-                            await turn_context.send_activity(follow_up_response)
-
-
-                            # await turn_context.send_activity(response_activity)
-                        # else: 
-                        #     '''Give schedule for two weeks'''
-                        #     all_week_query = "SELECT Date, Day, ScheduledStartTime, ScheduledEndTime,ActualStartTime,ActualStartTime FROM EmployeeSchedule WHERE EmployeeName = ?;"
-                        #     sql_cursor.execute(all_week_query, username)
-                        #     sql_cursor.execute(all_week_query, username)
-                        #     all_week_data = sql_cursor.fetchall()
-                        #     response_activity = MessageFactory.text(f'Your Last Week working Hours info:')
-
-                            # await turn_context.send_activity(response_activity)
-
-                        # LWH_query ='SELECT * FROM EmployeeSchedule WHERE EmployeeName = ? AND Date = ? ;'
-                        # UWH_query ='SELECT * FROM EmployeeSchedule WHERE EmployeeName = ? AND Date = ?  ;'
-
-                        # sql_cursor.execute(LWH_query, username, date)
-                        # LWH_data = sql_cursor.fetchone()
-                        # response_activity = MessageFactory.text(f'Your Last Week working Hours info:')
-                        # # await turn_context.send_activity(response_activity)
-                        # if LWH_data:
-                        #     # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
-                        #     employeename,employeeid ,Date, Day, ScheduledStartTime,ScheduledEndTime, ActualStartTime, ActualEndTime, ScheduledWorkingHours,ActualWorkingHours = LWH_data
-                        #     # card_color = "Red"
-                        #     # Create a Hero Card to display payslip information
-                        #     LWH_hero_card = HeroCard(
-                        #                                 title="Last Week Working Hours Info",
-                        #                                 text=(
-                        #                                         f"**Employee:** {employeename}\n\n "
-                        #                                         f"**EmployeeID:** {employeeid}\n\n "
-                        #                                         f"| **Day** | **Date** | **Actual Start Time** | **Actual End Time** |\n"
-                        #                                         f"| --- | --- | --- | --- |\n"  # Table header separator
-                        #                                         f"| {Day} | {Date} | {ActualStartTime} to {ActualEndTime} |\n"
-                        #                                     ),
-                        #                                 )
-
-
-                        #     # Send the Hero Card as an attachment
-                        #     response_activity = MessageFactory.attachment(CardFactory.hero_card(LWH_hero_card))
-                        #     await turn_context.send_activity(response_activity)
-                        #     follow_up_actions = SuggestedActions(
-                        #         actions=[
-                        #             CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                        #             CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                        #             # Add more follow-up actions as needed
-                        #         ]
-                        #     )
-                        #     follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                        #     follow_up_response.suggested_actions = follow_up_actions
-                        #     await turn_context.send_activity(follow_up_response)
-               
-            else:
-                print('Debug: Unkown Intent')
-                file_path = r"Guardsman Group FAQ.docx"
-                query_options = [file_path]
-                human_query = question
-                text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-                # llm = AzureChatOpenAI(deployment_name='gpt-0301', temperature = 0)
-                llm = AzureOpenAI(deployment_name='gpt-0301', temperature = 0)
-                memory = ConversationBufferMemory(memory_key="chat_history", input_key = 'human_input')
- 
-                response,_ = pdf_query_updated(query = human_query, text_splitter = text_splitter, llm = llm, query_options = ["Guardsman Group FAQ.docx"], memory = memory)
- 
-                response_activity = MessageFactory.text(response)
-       
-                await turn_context.send_activity(response_activity)   
-                follow_up_actions = SuggestedActions(
-                    actions=[
-                        CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                        CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                        # Add more follow-up actions as needed
-                    ]
-                )
-                follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                follow_up_response.suggested_actions = follow_up_actions
-                await turn_context.send_activity(follow_up_response)
-   
-                
-                
-
-                
-
-                # elif best_intent == "GetWorkingHours":
-
-                #     # dialog = GetWorkingHoursDialog()
-                #     # return await turn_context.begin_dialog(dialog.id, {"username": username})
-
-                #     # # Call the get_working_hours_dialog function
-                #     # working_hours_dialog = get_working_hours_dialog()
-                #     # # Add the dialog to your DialogSet or wherever you manage your dialogs
-                #     # dialog_set.add(working_hours_dialog)
-                #     # # Start the dialog
-                #     # await dialog_set.begin_dialog(working_hours_dialog.id)
-                #     conn_string = get_connection_string()
-                #     sql_connection = pyodbc.connect(conn_string)
-                #     sql_cursor = sql_connection.cursor()
-
-                #     WH_query = 'SELECT * FROM EmployeeSchedule WHERE EmployeeName = ? and date = ?;'
-                #     sql_cursor.execute(WH_query, username, date)
-                #     WH_data = sql_cursor.fetchone()
-                #     response_activity = MessageFactory.text(f'Your working Hous info:')
-                #     # await turn_context.send_activity(response_activity)
-                #     if WH_data:
-                #         # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
-                #         employeename,employeeid ,Date, Day, ScheduledStartTime,ScheduledEndTime, ActualStartTime, ActualEndTime, ScheduledWorkingHours,ActualWorkingHours = WH_data
-                #         # card_color = "Red"
-                #         # Create a Hero Card to display payslip information
-                #         payslip_hero_card = HeroCard(
-                #                                     title="WorkingHours Info",
-                #                                     text=(
-                #                                         f"**Employee:** {employeename}\n\n "
-                #                                         f"**EmployeeID:** {employeeid}\n\n "
-                #                                         f"**Date:** {Date}\n\n"
-                #                                         f"**Day:** {Day}\n\n"
-                #                                         f"**ScheduledStartTime:** {ScheduledStartTime}\n\n"
-                #                                         f"**ScheduledEndTime:** {ScheduledEndTime}\n\n"
-                #                                         f"**ActualStartTime:** {ActualStartTime}\n\n"
-                #                                         f"**ActualEndTime:** {ActualEndTime}\n\n"
-                #                                         f"**ScheduledWorkingHours:** {ScheduledWorkingHours}\n\n"
-                #                                         f"**ActualWorkingHours:** {ActualWorkingHours}"
-
-                #                                     ),
-                #                                     #  background_image=f"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAWElEQVR42mP8/5+h/H8A53/A5j4zEG8rA6vDp/wMWCg4iXg9IbIBvE9L1CBUII6xEMw5WUiVIkgFA0eL8AxgCoL5AAAAAElFTkSuQmCC",
-                #                                     # border_color=card_color
-                #         )
-
-
-                #         # Send the Hero Card as an attachment
-                #         response_activity = MessageFactory.attachment(CardFactory.hero_card(payslip_hero_card))
-                #         await turn_context.send_activity(response_activity)
-                #         follow_up_actions = SuggestedActions(
-                #             actions=[
-                #                 CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
-                #                 CardAction(title="No", type=ActionTypes.im_back, value="No"),
-                #                 # Add more follow-up actions as needed
-                #             ]
-                #         )
-                #         follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
-                #         follow_up_response.suggested_actions = follow_up_actions
-                #         await turn_context.send_activity(follow_up_response)
+                        entity = response['entities']
+                        if len(entity) == 0: 
                             
+
+                            # print('-'*111)
+                            # print(entity)
+                            # print('-'*111)
+
+                            GWH_available_actions = SuggestedActions(
+                            actions=[
+                                CardAction(title="Last Week Working  Hours", type=ActionTypes.im_back, value="Last Week Working  Hours"),
+                                CardAction(title="Next Week Working Hours", type=ActionTypes.im_back, value="Next Week Working Hours")
+                            ]
+                        )
+                            GWH_response_activity = MessageFactory.text("Please choose from available options")
+                            GWH_response_activity.suggested_actions = GWH_available_actions
+                            await turn_context.send_activity(GWH_response_activity)
+                        
+
+                        
+                        else: 
+                                
+                            response = output_from_clu["result"]["prediction"]  
+                            # print('-'*111)
+                            # print(response)
+                            # print('-'*111)
+                            # print(response['entities'][0]['category'])
+                            # print('-'*111)
+                            entity = response['entities'][0]['category']
+                            conn_string = get_connection_string()
+                            sql_connection = pyodbc.connect(conn_string)
+                            sql_cursor = sql_connection.cursor()
+
+                            if entity == 'PreviousWeek':
+                                prev_week_query = "SELECT EmployeeName, Date, Day, ActualStartTime, ActualEndTime FROM EmployeeSchedule WHERE ActualStartTime IS NOT NULL AND EmployeeName = ?;"
+                                sql_cursor.execute(prev_week_query, username)
+                                prev_week_data = sql_cursor.fetchall()
+
+                                response_activity = MessageFactory.text(f'Your Last Week working Hours info:')
+                                print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^', list(prev_week_data))
+
+                                output_prev_week = convert_dates(prev_week_data)
+                        
+                                data_for_adaptive_card = [
+                                    {
+                                        # "EmployeeName": row[0],
+                                        "Date": str(row[1]),
+                                        "Day": row[2],
+                                        "ActualStartTime": row[3],
+                                        "ActualEndTime": row[4],
+                                    }
+                                    for row in output_prev_week
+                                ]
+
+                                # Creating Adaptive Card
+                                adaptive_card = {
+                                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                    "type": "AdaptiveCard",
+                                    "version": "1.0",
+                                    "body": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "Previous Week Actual Working Hours"+ f"\n\nEmployeeName : {username}",
+                                            "weight": "bolder",
+                                            "size": "medium"
+                                        },
+                                        {
+                                            "type": "ColumnSet",
+                                            "columns": [
+                                                # {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "EmployeeName"}] + [{"type": "TextBlock", "text": data["EmployeeName"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Date"}] + [{"type": "TextBlock", "text": data["Date"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Day"}] + [{"type": "TextBlock", "text": data["Day"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ActualStartTime"}] + [{"type": "TextBlock", "text": data["ActualStartTime"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ActualEndTime"}] + [{"type": "TextBlock", "text": data["ActualEndTime"]} for data in data_for_adaptive_card]},
+                                            ]
+                                        }
+                                    ]
+                                }
+
+                                # Sending the Adaptive Card
+                                response_activity = MessageFactory.attachment(CardFactory.adaptive_card(adaptive_card))
+                                await turn_context.send_activity(response_activity)
+
+                                # Suggested Actions
+                                follow_up_actions = SuggestedActions(
+                                    actions=[
+                                        CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                                        CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                        # Add more follow-up actions as needed
+                                    ]
+                                )
+
+                                # Follow-up text with suggested actions
+                                follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                                follow_up_response.suggested_actions = follow_up_actions
+
+                                # Sending the follow-up message
+                                await turn_context.send_activity(follow_up_response)
+
+                            elif entity == 'UpcomingWeek':
+                                next_week_query = "SELECT EmployeeName,Date, Day, ScheduledStartTime, ScheduledEndTime FROM EmployeeSchedule WHERE ActualStartTime IS NULL AND EmployeeName = ?;"
+                                sql_cursor.execute(next_week_query, username)
+                                next_week_data = sql_cursor.fetchall()
+                                response_activity = MessageFactory.text(f'Your Next Week working Hours info:')
+                                print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^', list(next_week_data))
+
+                                output_next_week = convert_dates(next_week_data)
+                                print(output_next_week)
+                                data_for_adaptive_card = [
+                                    {
+                                        # "EmployeeName": row[0],
+                                        "Date": str(row[1]),
+                                        "Day": row[2],
+                                        "ScheduledStartTime": row[3],
+                                        "ScheduledEndTime": row[4],
+                                    }
+                                    for row in output_next_week
+                                ]
+
+                                # Creating Adaptive Card
+                                adaptive_card = {
+                                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                    "type": "AdaptiveCard",
+                                    "version": "1.0",
+                                    "body": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "Next Week Scheduled Working Hours " + f"\n\nEmployeeName : {username}",
+                                        
+                                            "weight": "bolder",
+                                            "size": "medium"
+                                        },
+                                        {
+                                            "type": "ColumnSet",
+                                            "columns": [
+                                                # {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": data["EmployeeName"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Date"}] +[{"type": "TextBlock", "text": data["Date"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "Day"}] + [{"type": "TextBlock", "text": data["Day"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ScheduledStartTime"}] + [{"type": "TextBlock", "text": data["ScheduledStartTime"]} for data in data_for_adaptive_card]},
+                                                {"type": "Column", "width": "auto", "items": [{"type": "TextBlock", "text": "ScheduledEndTime"}] + [{"type": "TextBlock", "text": data["ScheduledEndTime"]} for data in data_for_adaptive_card]},
+                                            ]
+                                        }
+                                    ]
+                                }
+
+                                # Sending the Adaptive Card
+                                response_activity = MessageFactory.attachment(CardFactory.adaptive_card(adaptive_card))
+                                await turn_context.send_activity(response_activity)
+
+                                # Suggested Actions
+                                follow_up_actions = SuggestedActions(
+                                    actions=[
+                                        CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                                        CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                        # Add more follow-up actions as needed
+                                    ]
+                                )
+
+                                # Follow-up text with suggested actions
+                                follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                                follow_up_response.suggested_actions = follow_up_actions
+
+                                # Sending the follow-up message
+                                await turn_context.send_activity(follow_up_response)
+
+
+                                # await turn_context.send_activity(response_activity)
+                            # else: 
+                            #     '''Give schedule for two weeks'''
+                            #     all_week_query = "SELECT Date, Day, ScheduledStartTime, ScheduledEndTime,ActualStartTime,ActualStartTime FROM EmployeeSchedule WHERE EmployeeName = ?;"
+                            #     sql_cursor.execute(all_week_query, username)
+                            #     sql_cursor.execute(all_week_query, username)
+                            #     all_week_data = sql_cursor.fetchall()
+                            #     response_activity = MessageFactory.text(f'Your Last Week working Hours info:')
+
+                                # await turn_context.send_activity(response_activity)
+
+                            # LWH_query ='SELECT * FROM EmployeeSchedule WHERE EmployeeName = ? AND Date = ? ;'
+                            # UWH_query ='SELECT * FROM EmployeeSchedule WHERE EmployeeName = ? AND Date = ?  ;'
+
+                            # sql_cursor.execute(LWH_query, username, date)
+                            # LWH_data = sql_cursor.fetchone()
+                            # response_activity = MessageFactory.text(f'Your Last Week working Hours info:')
+                            # # await turn_context.send_activity(response_activity)
+                            # if LWH_data:
+                            #     # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
+                            #     employeename,employeeid ,Date, Day, ScheduledStartTime,ScheduledEndTime, ActualStartTime, ActualEndTime, ScheduledWorkingHours,ActualWorkingHours = LWH_data
+                            #     # card_color = "Red"
+                            #     # Create a Hero Card to display payslip information
+                            #     LWH_hero_card = HeroCard(
+                            #                                 title="Last Week Working Hours Info",
+                            #                                 text=(
+                            #                                         f"**Employee:** {employeename}\n\n "
+                            #                                         f"**EmployeeID:** {employeeid}\n\n "
+                            #                                         f"| **Day** | **Date** | **Actual Start Time** | **Actual End Time** |\n"
+                            #                                         f"| --- | --- | --- | --- |\n"  # Table header separator
+                            #                                         f"| {Day} | {Date} | {ActualStartTime} to {ActualEndTime} |\n"
+                            #                                     ),
+                            #                                 )
+
+
+                            #     # Send the Hero Card as an attachment
+                            #     response_activity = MessageFactory.attachment(CardFactory.hero_card(LWH_hero_card))
+                            #     await turn_context.send_activity(response_activity)
+                            #     follow_up_actions = SuggestedActions(
+                            #         actions=[
+                            #             CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                            #             CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                            #             # Add more follow-up actions as needed
+                            #         ]
+                            #     )
+                            #     follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                            #     follow_up_response.suggested_actions = follow_up_actions
+                            #     await turn_context.send_activity(follow_up_response)
+                
+                else:
+                    print('Debug: Unkown Intent')
+                    file_path = r"Guardsman Group FAQ.docx"
+                    query_options = [file_path]
+                    human_query = question
+                    text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+                    # llm = AzureChatOpenAI(deployment_name='gpt-0301', temperature = 0)
+                    llm = AzureOpenAI(deployment_name='gpt-0301', temperature = 0)
+                    memory = ConversationBufferMemory(memory_key="chat_history", input_key = 'human_input')
+    
+                    response,_ = pdf_query_updated(query = human_query, text_splitter = text_splitter, llm = llm, query_options = ["Guardsman Group FAQ.docx"], memory = memory)
+    
+                    response_activity = MessageFactory.text(response)
+        
+                    await turn_context.send_activity(response_activity)   
+                    follow_up_actions = SuggestedActions(
+                        actions=[
+                            CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                            CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                            # Add more follow-up actions as needed
+                        ]
+                    )
+                    follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                    follow_up_response.suggested_actions = follow_up_actions
+                    await turn_context.send_activity(follow_up_response)
+    
+                    
+                    
+
+                    
+
+                    # elif best_intent == "GetWorkingHours":
+
+                    #     # dialog = GetWorkingHoursDialog()
+                    #     # return await turn_context.begin_dialog(dialog.id, {"username": username})
+
+                    #     # # Call the get_working_hours_dialog function
+                    #     # working_hours_dialog = get_working_hours_dialog()
+                    #     # # Add the dialog to your DialogSet or wherever you manage your dialogs
+                    #     # dialog_set.add(working_hours_dialog)
+                    #     # # Start the dialog
+                    #     # await dialog_set.begin_dialog(working_hours_dialog.id)
+                    #     conn_string = get_connection_string()
+                    #     sql_connection = pyodbc.connect(conn_string)
+                    #     sql_cursor = sql_connection.cursor()
+
+                    #     WH_query = 'SELECT * FROM EmployeeSchedule WHERE EmployeeName = ? and date = ?;'
+                    #     sql_cursor.execute(WH_query, username, date)
+                    #     WH_data = sql_cursor.fetchone()
+                    #     response_activity = MessageFactory.text(f'Your working Hous info:')
+                    #     # await turn_context.send_activity(response_activity)
+                    #     if WH_data:
+                    #         # Assuming the columns in payslips table are in the order of: EmployeeName, Salary, Deductions, NetPay
+                    #         employeename,employeeid ,Date, Day, ScheduledStartTime,ScheduledEndTime, ActualStartTime, ActualEndTime, ScheduledWorkingHours,ActualWorkingHours = WH_data
+                    #         # card_color = "Red"
+                    #         # Create a Hero Card to display payslip information
+                    #         payslip_hero_card = HeroCard(
+                    #                                     title="WorkingHours Info",
+                    #                                     text=(
+                    #                                         f"**Employee:** {employeename}\n\n "
+                    #                                         f"**EmployeeID:** {employeeid}\n\n "
+                    #                                         f"**Date:** {Date}\n\n"
+                    #                                         f"**Day:** {Day}\n\n"
+                    #                                         f"**ScheduledStartTime:** {ScheduledStartTime}\n\n"
+                    #                                         f"**ScheduledEndTime:** {ScheduledEndTime}\n\n"
+                    #                                         f"**ActualStartTime:** {ActualStartTime}\n\n"
+                    #                                         f"**ActualEndTime:** {ActualEndTime}\n\n"
+                    #                                         f"**ScheduledWorkingHours:** {ScheduledWorkingHours}\n\n"
+                    #                                         f"**ActualWorkingHours:** {ActualWorkingHours}"
+
+                    #                                     ),
+                    #                                     #  background_image=f"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAWElEQVR42mP8/5+h/H8A53/A5j4zEG8rA6vDp/wMWCg4iXg9IbIBvE9L1CBUII6xEMw5WUiVIkgFA0eL8AxgCoL5AAAAAElFTkSuQmCC",
+                    #                                     # border_color=card_color
+                    #         )
+
+
+                    #         # Send the Hero Card as an attachment
+                    #         response_activity = MessageFactory.attachment(CardFactory.hero_card(payslip_hero_card))
+                    #         await turn_context.send_activity(response_activity)
+                    #         follow_up_actions = SuggestedActions(
+                    #             actions=[
+                    #                 CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                    #                 CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                    #                 # Add more follow-up actions as needed
+                    #             ]
+                    #         )
+                    #         follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                    #         follow_up_response.suggested_actions = follow_up_actions
+                    #         await turn_context.send_activity(follow_up_response)
+        await self.con_state.save_changes(turn_context)
+                           
 
 
 
