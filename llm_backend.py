@@ -47,8 +47,8 @@ def pdf_query_updated(query, text_splitter, llm, query_options, memory):
             documents_query.extend(loader.load())
         elif file.endswith('.docx') or file.endswith('.doc'):
             doc_path = './documents/' + file
-            # print(doc_path,'*'*117)
-            loader = Docx2txtLoader(doc_path)
+            print(doc_path,'*'*117)
+            loader = Docx2txtLoader(file)
             documents_query.extend(loader.load())
         elif file.endswith('.txt'):
             text_path = './documents/' + file
