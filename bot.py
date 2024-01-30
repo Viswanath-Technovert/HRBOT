@@ -1,23 +1,16 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
-from langchain.llms import AzureOpenAI
+from langchain_openai.llms.azure import AzureOpenAI
 # from langchain.embeddings import OpenAIEmbeddings
 # from langchain.chat_models.azure_openai import AzureChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from llm_backend import pdf_query_updated
+from llm_backend_updated import pdf_query
 import os
 from datetime import datetime
 
-# os.environ["OPENAI_API_TYPE"] = "azure"
-# os.environ["OPENAI_API_BASE"] = "https://utterancesresource.openai.azure.com/"
-# os.environ["OPENAI_API_KEY"] = "5ea3e8e59b8a418e9cc3c066f853b0c0"
-# os.environ["OPENAI_API_VERSION"] = "2023-07-01-preview"
-
-os.environ["OPENAI_API_KEY"]= 'e63ed695495543d58595fab4e27e4ff1'
-os.environ['OPENAI_API_VERSION'] = '2023-07-01-preview'
-os.environ['OPENAI_API_BASE'] = 'https://tv-llm-applications.openai.azure.com/'
-os.environ['OPENAI_API_TYPE'] = 'azure'
+os.environ['OPENAI_API_VERSION'] = '2023-12-01-preview'
+os.environ['AZURE_OPENAI_API_KEY'] = 'e63ed695495543d58595fab4e27e4ff1'
 
 from botbuilder.core import ActivityHandler, MessageFactory, TurnContext,CardFactory, ConversationState
 from botbuilder.schema import ChannelAccount, CardAction, ActionTypes, SuggestedActions,HeroCard,  CardAction
@@ -872,15 +865,16 @@ class MyBot(ActivityHandler):
                 else:
                     
                     #'Debug: Unkown Intent')
-                    file_path = r"Guardsman Group FAQ.docx"
-                    query_options = [file_path]
+                    # file_path = r"Guardsman Group FAQ.docx"
+                    # query_options = [file_path]
                     human_query = question
                     text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-                    # llm = AzureChatOpenAI(deployment_name='gpt-0301', temperature = 0)
-                    llm = AzureOpenAI(deployment_name='gpt-0301', temperature = 0)
+                    llm = AzureOpenAI(azure_deployment="gpt-instruct",
+                    azure_endpoint='https://tv-llm-applications.openai.azure.com/'
+                    )
                     memory = ConversationBufferMemory(memory_key="chat_history", input_key = 'human_input')
     
-                    response,_ = pdf_query_updated(query = human_query, text_splitter = text_splitter, llm = llm, query_options = ["Guardsman Group FAQ.docx"], memory = memory)
+                    response,context_docs = pdf_query(query = human_query, text_splitter = text_splitter, llm = llm, query_options = ["Guardsman Group FAQ.docx"], memory = memory)
     
                     response_activity = MessageFactory.text(response)
         

@@ -1,0 +1,13 @@
+botbuilder-core
+langchain
+openai
+tiktoken
+botbuilder-dialogs
+pandas
+pyodbc
+azure-ai-language-questionanswering
+azure-ai-language-conversations
+docx2txt
+pypdf
+PyPDF2
+faiss-cpu
