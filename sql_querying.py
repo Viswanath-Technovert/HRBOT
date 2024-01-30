@@ -23,7 +23,7 @@ def sql_query(question,db):
         verbose=True,
         agent_type=AgentType.OPENAI_FUNCTIONS
     )
-
+    
     response = agent_executor.invoke(question)
 
     return response

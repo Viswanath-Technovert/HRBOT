@@ -161,7 +161,7 @@ def clu_get_intent(result_from_clu):
     confidence_top_intent = intents_df[intents_df.category == top_intent].confidenceScore
     return top_intent, confidence_top_intent
 
-username = 'Thomas'
+username = 'Peter Jones'
 date = "2023-11-13"
 
 class MyBot(ActivityHandler):
@@ -288,7 +288,19 @@ class MyBot(ActivityHandler):
                     Lp_response_activity = MessageFactory.text('Kindly choose the category of leave policy information you are seeking:')
                     Lp_response_activity.suggested_actions = LP_actions
                     await turn_context.send_activity(Lp_response_activity)
-                    
+                
+                elif lower_question == "profile details":
+                    turn_context.turn_state['current_state'] = "profile details"
+                    self.current_state = turn_context.turn_state['current_state']     
+                    LM_actions = SuggestedActions(
+                    actions=[
+                        CardAction(title="View My Info", type=ActionTypes.im_back, value="View My Info"),
+                        CardAction(title="Return to the main menu", type=ActionTypes.im_back, value="Return to the main menu"),
+                    ]
+                    )
+                    LM_response_activity = MessageFactory.text("How may I assist you with your profile details?")
+                    LM_response_activity.suggested_actions = LM_actions
+                    await turn_context.send_activity(LM_response_activity)                
                     
                 elif  lower_question == "leave management" :
                     #"3")
@@ -338,6 +350,19 @@ class MyBot(ActivityHandler):
                         #'What else statement is done')
                         yes_response_activity.suggested_actions = yes_suggested_actions
                         await turn_context.send_activity(yes_response_activity)
+                    
+                    elif self.outer_state == "profile details" : 
+                        yes_suggested_actions = SuggestedActions(
+                            actions=[
+                            
+                                CardAction(title="Return to the main menu", type=ActionTypes.im_back, value="Return to the main menu")
+                            ]
+                        )
+                        yes_response_activity = MessageFactory.text("Please type your query or select from the options below")
+                        #'#'*75)
+                        #'What else statement is done')
+                        yes_response_activity.suggested_actions = yes_suggested_actions
+                        await turn_context.send_activity(yes_response_activity)                    
 
                         
                     else:
@@ -383,6 +408,18 @@ class MyBot(ActivityHandler):
                             aboutorganization_response_activity = MessageFactory.text("What else would you like to know about Guardsman?")
                             aboutorganization_response_activity.suggested_actions = org_available_actions
                             await turn_context.send_activity(aboutorganization_response_activity)
+
+                    elif self.current_state == "profile details":
+                            LP_actions = SuggestedActions(
+                                actions=[                    
+                                    CardAction(title="View My Info", type=ActionTypes.im_back, value="View My Info"),
+                                    CardAction(title="Return to the main menu", type=ActionTypes.im_back, value="Return to the main menu"),
+                                    
+                                ]
+                            )
+                            Lp_response_activity = MessageFactory.text('How may I assist you with your profile details?')
+                            Lp_response_activity.suggested_actions = LP_actions
+                            await turn_context.send_activity(Lp_response_activity)
 
                     elif self.current_state == "leave policies":
                             LP_actions = SuggestedActions(
@@ -552,6 +589,7 @@ class MyBot(ActivityHandler):
 
                     hi_suggested_actions = SuggestedActions(
                         actions=[
+                            CardAction(title="Profile Details", type=ActionTypes.im_back, value="Profile Details"),
                             CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
                             CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
                             CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
@@ -568,6 +606,7 @@ class MyBot(ActivityHandler):
                     # print(confidence_best_intent)
                     main_menu_actions = SuggestedActions(
                         actions=[
+                            CardAction(title="Profile Details", type=ActionTypes.im_back, value="Profile Details"),
                             CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
                             CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
                             CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),
@@ -584,7 +623,7 @@ class MyBot(ActivityHandler):
                     #"11")
                     # print(lower_question)
                     # print(self.current_state)
-                    if answer.answer == "Thank you for engaging with me; if you ever seek more information or have additional queries, feel free to reach out. To explore further details or initiate a conversation, Just type 'Hi,' and I'll be ready to assist you with any inquiries you may have. Goodbye for now, and have a wonderful day!":
+                    if answer.answer == "Thanks for interacting! If you need anything else, just type 'Hi' Have a great day!":
                         await turn_context.send_activity(answer.answer)
                         #"inthis particular")
                     else:
@@ -675,7 +714,53 @@ class MyBot(ActivityHandler):
                             await turn_context.send_activity(follow_up_response)
 
                     
+                    elif best_intent == "GetEmployeeInfo":
+                        turn_context.turn_state['current_state'] = "profile details"
+                        self.current_state = turn_context.turn_state['current_state']
+                        # print(self.current_state)
+                        # self.outer_state = "profile details"
+                        sql_cursor = get_sql_connection_string()
+                        # sql_connection = pyodbc.connect(conn_string)
+                        # sql_cursor = sql_connection.cursor()
+    
+                        EL_info_query = 'SELECT * FROM EmployeeInformation WHERE EmployeeName = ?;'
+                        sql_cursor.execute(EL_info_query, username)
+                        EL_info = sql_cursor.fetchone()
+                        if EL_info:
+                            # Assuming the columns in employee table are in the order of: EmployeeID, EmployeeName, Age, Gender, Contact, Email, Address, Designation, EmploymentType
+                            employee_id, employee_name, age, gender, contact, email, address, department, employment_type = EL_info
 
+                            # Create a Hero Card to display employee information
+                            EL_info_hero_card = HeroCard(
+                                title="Employee Information",
+                                text=(
+                                    f"**Employee ID:** {employee_id}\n\n"
+                                    f"**Employee Name:** {employee_name}\n\n"
+                                    f"**Age:** {age}\n\n"
+                                    f"**Gender:** {gender}\n\n"
+                                    f"**Contact:** {contact}\n\n"
+                                    f"**Email:** {email}\n\n"
+                                    f"**Address:** {address}\n\n"
+                                    f"**Department:** {department}\n\n"
+                                    f"**Employment Type:** {employment_type}"
+                                )
+                            )
+
+                            # Send the Hero Card as an attachment
+                            response_activity = MessageFactory.attachment(CardFactory.hero_card(EL_info_hero_card))
+                            await turn_context.send_activity(response_activity)
+
+                            follow_up_actions = SuggestedActions(
+                                actions=[
+                                    CardAction(title="Yes", type=ActionTypes.im_back, value="Yes"),
+                                    CardAction(title="No", type=ActionTypes.im_back, value="No"),
+                                    # Add more follow-up actions as needed
+                                ]
+                            )
+
+                            follow_up_response = MessageFactory.text("Is there anything else you would like to know?")
+                            follow_up_response.suggested_actions = follow_up_actions
+                            await turn_context.send_activity(follow_up_response)
 
                     
                     elif best_intent == "CheckLeaveBalances":
@@ -910,8 +995,8 @@ class MyBot(ActivityHandler):
                     azure_endpoint='https://tv-llm-applications.openai.azure.com/'
                     )
                     memory = ConversationBufferMemory(memory_key="chat_history", input_key = 'human_input')
-    
-                    response = pdf_query(query = human_query, text_splitter = text_splitter, llm = llm, query_options = ["Guardsman Group FAQ.docx"], memory = memory, llm_db = self.llm_cursor)
+                    employee = "Peter Jones"
+                    response = pdf_query(query = human_query, text_splitter = text_splitter, llm = llm, query_options = ["Guardsman Group FAQ.docx"], memory = memory, llm_db = self.llm_cursor, employee = employee)
     
                     response_activity = MessageFactory.text(response)
         
@@ -944,6 +1029,7 @@ class MyBot(ActivityHandler):
 
                 suggested_actions = SuggestedActions(
                     actions=[
+                        CardAction(title="Profile Details", type=ActionTypes.im_back, value="Profile Details"),
                         CardAction(title="Leave Management", type=ActionTypes.im_back, value="Leave Management"),
                         CardAction(title="Get Working Hours", type=ActionTypes.im_back, value="Get Working Hours"),
                         CardAction(title="Payroll Details", type=ActionTypes.im_back, value="Payroll Details"),

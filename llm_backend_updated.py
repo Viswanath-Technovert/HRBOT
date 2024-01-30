@@ -11,7 +11,7 @@ from sql_querying import sql_query
 os.environ['OPENAI_API_VERSION'] = '2023-12-01-preview'
 os.environ['AZURE_OPENAI_API_KEY'] = 'e63ed695495543d58595fab4e27e4ff1'
 
-def llm_query(query, document_search, chain,llm_db):
+def llm_query(query, document_search, chain,llm_db, employee):
     
     docs = document_search.similarity_search(query)
     # chain_res = chain.predict(human_input = query, context = docs).split('Human:')[0]
@@ -20,6 +20,7 @@ def llm_query(query, document_search, chain,llm_db):
     print('1'+chain_res+'1')
 
     if chain_res == " No Answer Found!":
+        query_empl = query + f'Employee Name: {employee}'
         response = sql_query(query,llm_db)
         return response['output']
     else:
@@ -27,7 +28,7 @@ def llm_query(query, document_search, chain,llm_db):
 
 
 
-def pdf_query(query, text_splitter, llm, query_options, memory, llm_db):  
+def pdf_query(query, text_splitter, llm, query_options, memory, llm_db, employee):  
 
     documents_query = []
     for file in query_options:
@@ -65,7 +66,7 @@ def pdf_query(query, text_splitter, llm, query_options, memory, llm_db):
     prompt = PromptTemplate(input_variables=["chat_history", "human_input", "context"], template=template)
     chain = LLMChain(llm = llm, prompt = prompt,memory = memory)
 
-    result = llm_query(query, document_search, chain,llm_db)
+    result = llm_query(query, document_search, chain,llm_db, employee)
 
     return result
 
