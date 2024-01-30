@@ -6,20 +6,28 @@ from langchain_community.vectorstores.faiss import FAISS
 from langchain.prompts import PromptTemplate
 from langchain_openai.embeddings.azure import AzureOpenAIEmbeddings
 import os
+from sql_querying import sql_query
 
 os.environ['OPENAI_API_VERSION'] = '2023-12-01-preview'
 os.environ['AZURE_OPENAI_API_KEY'] = 'e63ed695495543d58595fab4e27e4ff1'
 
-def llm_query(query, document_search, chain):
+def llm_query(query, document_search, chain,llm_db):
     
     docs = document_search.similarity_search(query)
     # chain_res = chain.predict(human_input = query, context = docs).split('Human:')[0]
+    print('*'*10,'searching in sql','*'*10)
     chain_res = chain.predict(human_input = query, context = docs)
-    return chain_res + '\n\n', docs
+    print('1'+chain_res+'1')
+
+    if chain_res == " No Answer Found!":
+        response = sql_query(query,llm_db)
+        return response['output']
+    else:
+        return chain_res + '\n\n'
 
 
 
-def pdf_query(query, text_splitter, llm, query_options, memory):  
+def pdf_query(query, text_splitter, llm, query_options, memory, llm_db):  
 
     documents_query = []
     for file in query_options:
@@ -46,6 +54,7 @@ def pdf_query(query, text_splitter, llm, query_options, memory):
 
     template = """You are an AI having a conversation with a human.
     Given the following extracted parts of a long document and a question, create a final answer.
+    And if you can't find the answer, strictly mention "No Answer Found!"
 
     {context}
 
@@ -56,9 +65,9 @@ def pdf_query(query, text_splitter, llm, query_options, memory):
     prompt = PromptTemplate(input_variables=["chat_history", "human_input", "context"], template=template)
     chain = LLMChain(llm = llm, prompt = prompt,memory = memory)
 
-    result, context_docs = llm_query(query, document_search, chain)
+    result = llm_query(query, document_search, chain,llm_db)
 
-    return result, context_docs
+    return result
 
 
 
